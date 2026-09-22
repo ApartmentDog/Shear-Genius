@@ -306,7 +306,7 @@ private fun extractPalette(b: Bitmap): List<Int> {
             acc[0] += r.toLong()
             acc[1] += g.toLong()
             acc[2] += bl.toLong()
-            acc[3] += 1
+            acc[3] += 1L
         }
         i += stride
     }

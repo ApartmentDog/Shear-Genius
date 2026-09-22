@@ -301,7 +301,7 @@ class AppState(private val context: Context) {
     fun save() {
         try {
             File(context.filesDir, "current.png").outputStream().use { writePng(it) }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
         }
         savePrefs()
     }
