@@ -1,0 +1,374 @@
+package com.apartmentdog.sheargenius.ui
+
+import android.graphics.Bitmap
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableFloatState
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.apartmentdog.sheargenius.AppState
+import com.apartmentdog.sheargenius.Tool
+import com.apartmentdog.sheargenius.model.Part
+import com.apartmentdog.sheargenius.model.SkinLayout
+import kotlin.math.abs
+import kotlin.math.floor
+import kotlin.math.roundToInt
+
+@Composable
+fun EditorScreen(state: AppState) {
+    var pendingSlim by remember { mutableStateOf<Boolean?>(null) }
+    var showColor by remember { mutableStateOf(false) }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Panel(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BlockButton(
+                        onClick = { requestModel(state, false) { pendingSlim = it } },
+                        label = "Steve",
+                        selected = !state.slim
+                    )
+                    BlockButton(
+                        onClick = { requestModel(state, true) { pendingSlim = it } },
+                        label = "Alex",
+                        selected = state.slim
+                    )
+                }
+                BlockButton(
+                    onClick = { state.overlayVisible = !state.overlayVisible },
+                    label = "Overlay",
+                    selected = state.overlayVisible
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            SkinCanvas(state, Modifier.fillMaxWidth().aspectRatio(1f))
+            Spacer(Modifier.height(8.dp))
+            Legend()
+        }
+
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+        ) {
+            ToolSlot(state, Tool.PENCIL, PixelIcons.Pencil)
+            ToolSlot(state, Tool.ERASER, PixelIcons.Eraser)
+            ToolSlot(state, Tool.FILL, PixelIcons.Bucket)
+            ToolSlot(state, Tool.EYEDROPPER, PixelIcons.Dropper)
+            Slot(selected = state.mirror, onClick = { state.mirror = !state.mirror }) {
+                PixelIconView(PixelIcons.Mirror, Blocky.IconDark, Modifier.size(24.dp))
+            }
+        }
+
+        Panel(Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Slot(size = 52.dp, onClick = { showColor = true }) {
+                    Box(Modifier.size(30.dp).background(Color(state.color)))
+                }
+                Column(Modifier.weight(1f)) {
+                    PixelText(hexOf(state.color), 16.sp)
+                    PixelText("Tap the swatch to edit", 12.sp)
+                }
+                BlockButton(onClick = { state.addToPalette(state.color) }, icon = PixelIcons.Plus, label = "Save")
+            }
+            Spacer(Modifier.height(10.dp))
+            PaletteGrid(
+                state.palette,
+                state.color,
+                onPick = { state.color = it },
+                onRemove = { state.removeFromPalette(it) }
+            )
+            Spacer(Modifier.height(6.dp))
+            PixelText("Long-press a color to remove it", 11.sp)
+        }
+    }
+
+    val target = pendingSlim
+    if (target != null) {
+        AlertDialog(
+            onDismissRequest = { pendingSlim = null },
+            title = { Text(if (target) "Switch to Alex?" else "Switch to Steve?") },
+            text = {
+                Text(
+                    if (target) "Alex arms are 3 pixels wide, so the last column of each arm face is dropped. You can undo this."
+                    else "Steve arms are 4 pixels wide, so the last column of each arm face is repeated to fill the gap. You can undo this."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.setSlim(target)
+                    pendingSlim = null
+                }) { Text("Convert") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingSlim = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showColor) {
+        ColorDialog(
+            initial = state.color,
+            onDismiss = { showColor = false },
+            onApply = {
+                state.color = it
+                state.savePrefs()
+            },
+            onSave = { state.addToPalette(it) }
+        )
+    }
+}
+
+private fun requestModel(state: AppState, slim: Boolean, ask: (Boolean) -> Unit) {
+    if (state.slim == slim) return
+    if (state.armsHaveContent()) ask(slim) else state.setSlim(slim)
+}
+
+@Composable
+private fun ToolSlot(state: AppState, tool: Tool, icon: PixelIcon) {
+    Slot(selected = state.tool == tool, onClick = { state.tool = tool }) {
+        PixelIconView(icon, Blocky.IconDark, Modifier.size(24.dp))
+    }
+}
+
+@Composable
+private fun Legend() {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
+    ) {
+        listOf("Head" to Part.HEAD, "Body" to Part.BODY, "Arms" to Part.ARM, "Legs" to Part.LEG).forEach { (name, part) ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(10.dp).background(Color(part.guide)))
+                Spacer(Modifier.width(4.dp))
+                PixelText(name, 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SkinCanvas(state: AppState, modifier: Modifier) {
+    val scale = remember { mutableFloatStateOf(1f) }
+    val offset = remember { mutableStateOf(Offset.Zero) }
+    val bitmap = remember { Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888) }
+    val image = remember(bitmap) { bitmap.asImageBitmap() }
+    val buffer = remember { IntArray(SkinLayout.COUNT) }
+
+    Canvas(
+        modifier
+            .insetFrame()
+            .clipToBounds()
+            .pointerInput(Unit) { editorGestures(state, scale, offset) }
+    ) {
+        @Suppress("UNUSED_VARIABLE")
+        val v = state.version
+        val showOverlay = state.overlayVisible
+        val map = state.regionMap
+        val boxes = state.boxes
+        val px = state.pixels
+        for (i in 0 until SkinLayout.COUNT) {
+            val b = map[i]
+            buffer[i] = if (b < 0) {
+                0
+            } else {
+                val box = boxes[b]
+                if (box.overlay && !showOverlay) {
+                    0x66000000
+                } else {
+                    val p = px[i]
+                    if ((p ushr 24) == 0) {
+                        val a = if (box.overlay) 0x40 else 0x80
+                        (a shl 24) or (box.part.guide and 0xFFFFFF)
+                    } else {
+                        p
+                    }
+                }
+            }
+        }
+        bitmap.setPixels(buffer, 0, 64, 0, 0, 64, 64)
+
+        val s = scale.floatValue
+        val o = offset.value
+        val full = size.width * s
+        val cell = full / 64f
+
+        val light = Color(0xFFF1EFE8)
+        val dark = Color(0xFFD3D1C7)
+        for (cy in 0 until 16) for (cx in 0 until 16) {
+            drawRect(
+                if ((cx + cy) % 2 == 0) light else dark,
+                Offset(o.x + cx * 4 * cell, o.y + cy * 4 * cell),
+                Size(4 * cell + 0.5f, 4 * cell + 0.5f)
+            )
+        }
+        drawImage(
+            image = image,
+            srcOffset = IntOffset.Zero,
+            srcSize = IntSize(64, 64),
+            dstOffset = IntOffset(o.x.roundToInt(), o.y.roundToInt()),
+            dstSize = IntSize(full.roundToInt(), full.roundToInt()),
+            filterQuality = FilterQuality.None
+        )
+        val minor = Color.Black.copy(alpha = 0.08f)
+        val major = Color.Black.copy(alpha = 0.25f)
+        for (i in 0..64) {
+            val isMajor = i % 8 == 0
+            if (!isMajor && cell < 6f) continue
+            val c = if (isMajor) major else minor
+            val p = i * cell
+            drawLine(c, Offset(o.x + p, o.y), Offset(o.x + p, o.y + full), 1f)
+            drawLine(c, Offset(o.x, o.y + p), Offset(o.x + full, o.y + p), 1f)
+        }
+    }
+}
+
+/** One finger paints, two fingers zoom and pan. A stroke is rolled back if a second finger lands. */
+private suspend fun PointerInputScope.editorGestures(
+    state: AppState,
+    scale: MutableFloatState,
+    offset: MutableState<Offset>
+) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        val before = state.copyPixels()
+        var multi = false
+        var changed = false
+        var last: IntOffset? = null
+
+        fun toSkin(p: Offset): IntOffset? {
+            val cell = size.width * scale.floatValue / 64f
+            val x = floor((p.x - offset.value.x) / cell).toInt()
+            val y = floor((p.y - offset.value.y) / cell).toInt()
+            return if (x in 0..63 && y in 0..63) IntOffset(x, y) else null
+        }
+
+        fun stroke(p: Offset) {
+            val cur = toSkin(p)
+            if (cur == null) {
+                last = null
+                return
+            }
+            val c = if (state.tool == Tool.ERASER) 0 else state.color
+            val from = last ?: cur
+            line(from, cur) { x, y -> if (state.setPixel(y * 64 + x, c)) changed = true }
+            last = cur
+            state.touched()
+        }
+
+        val pen = state.tool == Tool.PENCIL || state.tool == Tool.ERASER
+        if (pen) stroke(down.position)
+        down.consume()
+
+        do {
+            val event = awaitPointerEvent()
+            val pressed = event.changes.count { it.pressed }
+            if (pressed >= 2) {
+                if (!multi) {
+                    multi = true
+                    if (changed) {
+                        state.restore(before)
+                        changed = false
+                    }
+                }
+                val zoom = event.calculateZoom()
+                val pan = event.calculatePan()
+                val centroid = event.calculateCentroid(useCurrent = true)
+                val old = scale.floatValue
+                val ns = (old * zoom).coerceIn(1f, 12f)
+                var no = (offset.value - centroid) * (ns / old) + centroid + pan
+                val full = size.width * ns
+                no = Offset(
+                    no.x.coerceIn(size.width - full, 0f),
+                    no.y.coerceIn(size.height - full, 0f)
+                )
+                scale.floatValue = ns
+                offset.value = no
+            } else if (!multi && pressed == 1 && pen) {
+                stroke(event.changes.first { it.pressed }.position)
+            }
+            event.changes.forEach { if (it.positionChanged()) it.consume() }
+        } while (event.changes.any { it.pressed })
+
+        if (!multi) {
+            when (state.tool) {
+                Tool.FILL -> toSkin(down.position)?.let {
+                    if (state.fill(it.y * 64 + it.x, state.color)) changed = true
+                }
+                Tool.EYEDROPPER -> toSkin(down.position)?.let { state.pick(it.y * 64 + it.x) }
+                else -> {}
+            }
+        }
+        if (changed) {
+            state.touched()
+            state.commit(before)
+        }
+    }
+}
+
+private fun line(a: IntOffset, b: IntOffset, plot: (Int, Int) -> Unit) {
+    var x0 = a.x
+    var y0 = a.y
+    val dx = abs(b.x - x0)
+    val dy = -abs(b.y - y0)
+    val sx = if (x0 < b.x) 1 else -1
+    val sy = if (y0 < b.y) 1 else -1
+    var err = dx + dy
+    while (true) {
+        plot(x0, y0)
+        if (x0 == b.x && y0 == b.y) break
+        val e2 = 2 * err
+        if (e2 >= dy) {
+            err += dy
+            x0 += sx
+        }
+        if (e2 <= dx) {
+            err += dx
+            y0 += sy
+        }
+    }
+}
