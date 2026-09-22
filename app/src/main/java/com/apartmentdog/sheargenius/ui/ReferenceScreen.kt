@@ -66,7 +66,7 @@ fun ReferenceScreen(state: AppState) {
         }
     }
     var sampled by remember { mutableStateOf<Int?>(null) }
-    val bmp = state.references.getOrNull(state.selectedRef)
+    val bmp = state.references.getOrNull(state.selectedRef)?.bitmap
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
@@ -112,9 +112,9 @@ fun ReferenceScreen(state: AppState) {
                     Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    state.references.forEachIndexed { i, b ->
-                        key(b) {
-                            val thumb = remember(b) { b.asImageBitmap() }
+                    state.references.forEachIndexed { i, ref ->
+                        key(ref.file.path) {
+                            val thumb = remember(ref) { ref.bitmap.asImageBitmap() }
                             Slot(
                                 size = 52.dp,
                                 selected = i == state.selectedRef,

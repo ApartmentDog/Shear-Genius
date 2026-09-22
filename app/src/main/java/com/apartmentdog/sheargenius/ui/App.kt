@@ -37,7 +37,7 @@ fun ShearGeniusApp(state: AppState) {
                         Screen.EDITOR -> EditorScreen(state)
                         Screen.REFERENCE -> ReferenceScreen(state)
                         Screen.PREVIEW -> PreviewScreen()
-                        Screen.EXPORT -> ExportScreen(state)
+                        Screen.FILES -> FilesScreen(state)
                     }
                 }
                 Hotbar(state)
@@ -57,8 +57,8 @@ private fun Header(state: AppState) {
             .padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        PixelText("Shear Genius", 19.sp, Color.White)
-        Spacer(Modifier.weight(1f))
+        PixelText(state.projectName, 19.sp, Color.White, Modifier.weight(1f), maxLines = 1)
+        Spacer(Modifier.width(8.dp))
         if (state.screen == Screen.EDITOR) {
             BlockButton(onClick = { state.undo() }, icon = PixelIcons.Undo, enabled = state.canUndo)
             Spacer(Modifier.width(8.dp))
@@ -73,7 +73,7 @@ private fun Hotbar(state: AppState) {
         Triple(Screen.EDITOR, "Editor", PixelIcons.Pencil),
         Triple(Screen.REFERENCE, "Reference", PixelIcons.Photo),
         Triple(Screen.PREVIEW, "Preview", PixelIcons.Cube),
-        Triple(Screen.EXPORT, "Export", PixelIcons.Disk)
+        Triple(Screen.FILES, "Files", PixelIcons.Disk)
     )
     Row(
         Modifier.navigationBarsPadding().fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),

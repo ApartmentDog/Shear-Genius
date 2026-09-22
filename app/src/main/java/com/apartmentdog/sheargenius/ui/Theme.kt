@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -57,8 +58,22 @@ fun rememberPixelFont(): FontFamily {
 }
 
 @Composable
-fun PixelText(text: String, size: TextUnit = 14.sp, color: Color = Blocky.Text, modifier: Modifier = Modifier) {
-    Text(text = text, modifier = modifier, color = color, fontSize = size, fontFamily = LocalPixelFont.current)
+fun PixelText(
+    text: String,
+    size: TextUnit = 14.sp,
+    color: Color = Blocky.Text,
+    modifier: Modifier = Modifier,
+    maxLines: Int = Int.MAX_VALUE
+) {
+    Text(
+        text = text,
+        modifier = modifier,
+        color = color,
+        fontSize = size,
+        fontFamily = LocalPixelFont.current,
+        maxLines = maxLines,
+        overflow = TextOverflow.Ellipsis
+    )
 }
 
 object Textures {

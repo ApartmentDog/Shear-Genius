@@ -97,6 +97,7 @@ fun EditorScreen(state: AppState) {
         ) {
             ToolSlot(state, Tool.PENCIL, PixelIcons.Pencil)
             ToolSlot(state, Tool.ERASER, PixelIcons.Eraser)
+            ToolSlot(state, Tool.LINE, PixelIcons.Line)
             ToolSlot(state, Tool.FILL, PixelIcons.Bucket)
             ToolSlot(state, Tool.EYEDROPPER, PixelIcons.Dropper)
             Slot(selected = state.mirror, onClick = { state.mirror = !state.mirror }) {
@@ -301,7 +302,20 @@ private suspend fun PointerInputScope.editorGestures(
         }
 
         val pen = state.tool == Tool.PENCIL || state.tool == Tool.ERASER
+        val lineStart = if (state.tool == Tool.LINE) toSkin(down.position) else null
+
+        fun previewLine(p: Offset) {
+            val start = lineStart ?: return
+            val end = toSkin(p) ?: return
+            state.restore(before)
+            changed = false
+            val c = state.color
+            line(start, end) { x, y -> if (state.setPixel(y * 64 + x, c)) changed = true }
+            state.touched()
+        }
+
         if (pen) stroke(down.position)
+        if (lineStart != null) previewLine(down.position)
         down.consume()
 
         do {
@@ -328,8 +342,9 @@ private suspend fun PointerInputScope.editorGestures(
                 )
                 scale.floatValue = ns
                 offset.value = no
-            } else if (!multi && pressed == 1 && pen) {
-                stroke(event.changes.first { it.pressed }.position)
+            } else if (!multi && pressed == 1) {
+                val pos = event.changes.first { it.pressed }.position
+                if (pen) stroke(pos) else if (lineStart != null) previewLine(pos)
             }
             event.changes.forEach { if (it.positionChanged()) it.consume() }
         } while (event.changes.any { it.pressed })
