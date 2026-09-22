@@ -59,6 +59,7 @@ object SkinRenderer {
         paint: Paint,
         slim: Boolean,
         showOverlay: Boolean,
+        hidden: Set<Int>,
         rx: Float,
         ry: Float,
         zoom: Float,
@@ -166,6 +167,7 @@ object SkinRenderer {
             tmp[2]
         }
         for (p in order) {
+            if (p in hidden) continue
             val base = boxes[p * 2]
             val over = boxes[p * 2 + 1]
             val c = centerOf(base.id, slim)
@@ -188,7 +190,9 @@ fun SkinModelView(
     ry: Float,
     zoom: Float,
     showOverlay: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    hidden: Set<Int> = emptySet(),
+    background: Int = 0xFF2C2C2A.toInt()
 ) {
     val bitmap = remember { Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888) }
     val paint = remember(bitmap) { SkinRenderer.newPaint(bitmap) }
@@ -197,8 +201,9 @@ fun SkinModelView(
         val v = state.version
         bitmap.setPixels(state.pixels, 0, 64, 0, 0, 64, 64)
         val slim = state.slim
+        drawRect(androidx.compose.ui.graphics.Color(background))
         drawIntoCanvas {
-            SkinRenderer.draw(it.nativeCanvas, paint, slim, showOverlay, rx, ry, zoom, size.width, size.height)
+            SkinRenderer.draw(it.nativeCanvas, paint, slim, showOverlay, hidden, rx, ry, zoom, size.width, size.height)
         }
     }
 }

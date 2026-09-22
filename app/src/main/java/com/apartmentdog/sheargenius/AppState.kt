@@ -64,6 +64,9 @@ class AppState(private val context: Context) {
     var previewZoom by mutableFloatStateOf(1f)
     var previewOverlay by mutableStateOf(true)
     var spin by mutableStateOf(false)
+    var previewHidden by mutableStateOf(emptySet<Int>())
+    var previewBg by mutableIntStateOf(0)
+        private set
     var miniPreview by mutableStateOf(false)
         private set
 
@@ -81,6 +84,7 @@ class AppState(private val context: Context) {
         projectsDir.mkdirs()
         color = prefs.getInt("color", color)
         miniPreview = prefs.getBoolean("miniPreview", false)
+        previewBg = prefs.getInt("previewBg", 0)
         migrateLegacy()
         refreshProjects()
         val last = prefs.getString("project", null)
@@ -508,6 +512,15 @@ class AppState(private val context: Context) {
         previewRx = 0.15f
         previewRy = -0.5f
         previewZoom = 1f
+    }
+
+    fun togglePart(part: Int) {
+        previewHidden = if (part in previewHidden) previewHidden - part else previewHidden + part
+    }
+
+    fun changePreviewBg(index: Int) {
+        previewBg = index
+        prefs.edit().putInt("previewBg", index).apply()
     }
 
     fun toggleMiniPreview() {

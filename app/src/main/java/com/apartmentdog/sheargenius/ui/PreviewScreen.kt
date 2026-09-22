@@ -1,10 +1,12 @@
 package com.apartmentdog.sheargenius.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,17 +15,32 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.apartmentdog.sheargenius.AppState
+
+/** Name to ARGB. Index is what gets saved in prefs. */
+val PREVIEW_BACKGROUNDS = listOf(
+    "Sky" to 0xFF9DB9D8.toInt(),
+    "Stone" to 0xFFB4B2A9.toInt(),
+    "Grass" to 0xFF8FB86A.toInt(),
+    "Dark" to 0xFF2C2C2A.toInt()
+)
+
+private val PARTS = listOf("Head", "Body", "R arm", "L arm", "R leg", "L leg")
 
 @Composable
 fun PreviewScreen(state: AppState) {
@@ -38,8 +55,12 @@ fun PreviewScreen(state: AppState) {
             }
         }
     }
+    val bgIndex = state.previewBg.coerceIn(0, PREVIEW_BACKGROUNDS.lastIndex)
 
-    Column(Modifier.fillMaxSize().padding(12.dp)) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
         Panel(Modifier.fillMaxWidth()) {
             SkinModelView(
                 state = state,
@@ -47,9 +68,11 @@ fun PreviewScreen(state: AppState) {
                 ry = state.previewRy,
                 zoom = state.previewZoom,
                 showOverlay = state.previewOverlay,
+                hidden = state.previewHidden,
+                background = PREVIEW_BACKGROUNDS[bgIndex].second,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(0.85f)
+                    .aspectRatio(1f)
                     .insetFrame()
                     .clipToBounds()
                     .pointerInput(Unit) { previewGestures(state) }
@@ -66,6 +89,41 @@ fun PreviewScreen(state: AppState) {
                 BlockButton(onClick = { state.spin = !state.spin }, label = "Spin", selected = state.spin)
                 Spacer(Modifier.weight(1f))
                 BlockButton(onClick = { state.resetPreview() }, label = "Reset view")
+            }
+        }
+
+        Panel(Modifier.fillMaxWidth()) {
+            PixelText("Body parts", 14.sp)
+            Spacer(Modifier.height(8.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                PARTS.withIndex().chunked(3).forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEach { (i, name) ->
+                            BlockButton(
+                                onClick = { state.togglePart(i) },
+                                label = name,
+                                selected = i !in state.previewHidden,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            PixelText("R and L are the character's right and left.", 11.sp)
+        }
+
+        Panel(Modifier.fillMaxWidth()) {
+            PixelText("Background", 14.sp)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                PREVIEW_BACKGROUNDS.forEachIndexed { i, (_, argb) ->
+                    Slot(size = 44.dp, selected = i == bgIndex, onClick = { state.changePreviewBg(i) }) {
+                        Box(Modifier.size(26.dp).background(Color(argb)))
+                    }
+                }
+                Spacer(Modifier.size(4.dp))
+                PixelText(PREVIEW_BACKGROUNDS[bgIndex].first, 14.sp)
             }
         }
     }

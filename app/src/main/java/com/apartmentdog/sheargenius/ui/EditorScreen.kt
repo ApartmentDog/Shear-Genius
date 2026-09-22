@@ -105,6 +105,7 @@ fun EditorScreen(state: AppState) {
                         ry = -0.5f,
                         zoom = 1f,
                         showOverlay = true,
+                        background = PREVIEW_BACKGROUNDS[state.previewBg.coerceIn(0, PREVIEW_BACKGROUNDS.lastIndex)].second,
                         modifier = Modifier
                             .size(104.dp)
                             .insetFrame()
