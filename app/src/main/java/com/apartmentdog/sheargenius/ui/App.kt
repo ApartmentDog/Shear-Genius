@@ -52,12 +52,15 @@ private fun Header(state: AppState) {
         Modifier
             .statusBarsPadding()
             .fillMaxWidth()
-            .height(60.dp)
-            .tiled(Textures.grass, 60.dp)
-            .padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 4.dp),
+            .height(72.dp)
+            .tiled(Textures.grass, 72.dp)
+            .padding(start = 12.dp, end = 12.dp, top = 18.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        PixelText(state.projectName, 19.sp, Color.White, Modifier.weight(1f), maxLines = 1)
+        Column(Modifier.weight(1f)) {
+            PixelText("Shear Genius", 18.sp, Color.White, maxLines = 1, lineHeight = 21.sp)
+            PixelText(state.projectName, 12.sp, Color(0xFFF1EFE8), maxLines = 1, lineHeight = 15.sp)
+        }
         Spacer(Modifier.width(8.dp))
         if (state.screen == Screen.EDITOR) {
             BlockButton(onClick = { state.undo() }, icon = PixelIcons.Undo, enabled = state.canUndo)

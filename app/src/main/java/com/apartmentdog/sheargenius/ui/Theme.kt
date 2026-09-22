@@ -63,7 +63,8 @@ fun PixelText(
     size: TextUnit = 14.sp,
     color: Color = Blocky.Text,
     modifier: Modifier = Modifier,
-    maxLines: Int = Int.MAX_VALUE
+    maxLines: Int = Int.MAX_VALUE,
+    lineHeight: TextUnit = TextUnit.Unspecified
 ) {
     Text(
         text = text,
@@ -72,6 +73,7 @@ fun PixelText(
         fontSize = size,
         fontFamily = LocalPixelFont.current,
         maxLines = maxLines,
+        lineHeight = lineHeight,
         overflow = TextOverflow.Ellipsis
     )
 }
