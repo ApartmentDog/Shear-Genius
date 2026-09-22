@@ -36,7 +36,7 @@ fun ShearGeniusApp(state: AppState) {
                     when (state.screen) {
                         Screen.EDITOR -> EditorScreen(state)
                         Screen.REFERENCE -> ReferenceScreen(state)
-                        Screen.PREVIEW -> PreviewScreen()
+                        Screen.PREVIEW -> PreviewScreen(state)
                         Screen.FILES -> FilesScreen(state)
                     }
                 }

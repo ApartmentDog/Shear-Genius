@@ -48,17 +48,6 @@ import com.apartmentdog.sheargenius.Screen
 import java.io.File
 
 @Composable
-fun PreviewScreen() {
-    Column(Modifier.fillMaxSize().padding(12.dp)) {
-        Panel(Modifier.fillMaxWidth()) {
-            PixelText("3D preview", 16.sp)
-            Spacer(Modifier.height(6.dp))
-            PixelText("Coming in phase 2: a model you can rotate, with the overlay layer raised off the body.", 13.sp)
-        }
-    }
-}
-
-@Composable
 fun FilesScreen(state: AppState) {
     val context = LocalContext.current
     var menuFor by remember { mutableStateOf<ProjectInfo?>(null) }

@@ -3,6 +3,7 @@ package com.apartmentdog.sheargenius.ui
 import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -49,6 +50,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.apartmentdog.sheargenius.AppState
+import com.apartmentdog.sheargenius.Screen
 import com.apartmentdog.sheargenius.Tool
 import com.apartmentdog.sheargenius.model.Part
 import com.apartmentdog.sheargenius.model.SkinLayout
@@ -79,16 +81,45 @@ fun EditorScreen(state: AppState) {
                         selected = state.slim
                     )
                 }
-                BlockButton(
-                    onClick = { state.overlayVisible = !state.overlayVisible },
-                    label = "Overlay",
-                    selected = state.overlayVisible
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BlockButton(
+                        onClick = { state.toggleMiniPreview() },
+                        label = "3D",
+                        selected = state.miniPreview
+                    )
+                    BlockButton(
+                        onClick = { state.overlayVisible = !state.overlayVisible },
+                        label = "Overlay",
+                        selected = state.overlayVisible
+                    )
+                }
             }
             Spacer(Modifier.height(10.dp))
             SkinCanvas(state, Modifier.fillMaxWidth().aspectRatio(1f))
             Spacer(Modifier.height(8.dp))
-            Legend()
+            if (state.miniPreview) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SkinModelView(
+                        state = state,
+                        rx = 0.15f,
+                        ry = -0.5f,
+                        zoom = 1f,
+                        showOverlay = true,
+                        modifier = Modifier
+                            .size(104.dp)
+                            .insetFrame()
+                            .clipToBounds()
+                            .clickable { state.screen = Screen.PREVIEW }
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Legend(compact = true)
+                        PixelText("Tap the model for the full preview", 11.sp)
+                    }
+                }
+            } else {
+                Legend(compact = false)
+            }
         }
 
         Row(
@@ -177,18 +208,32 @@ private fun ToolSlot(state: AppState, tool: Tool, icon: PixelIcon) {
 }
 
 @Composable
-private fun Legend() {
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
-    ) {
-        listOf("Head" to Part.HEAD, "Body" to Part.BODY, "Arms" to Part.ARM, "Legs" to Part.LEG).forEach { (name, part) ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(10.dp).background(Color(part.guide)))
-                Spacer(Modifier.width(4.dp))
-                PixelText(name, 12.sp)
+private fun Legend(compact: Boolean) {
+    val items = listOf("Head" to Part.HEAD, "Body" to Part.BODY, "Arms" to Part.ARM, "Legs" to Part.LEG)
+    if (compact) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            items.chunked(2).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    row.forEach { (name, part) -> LegendItem(name, part) }
+                }
             }
         }
+    } else {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
+        ) {
+            items.forEach { (name, part) -> LegendItem(name, part) }
+        }
+    }
+}
+
+@Composable
+private fun LegendItem(name: String, part: Part) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(10.dp).background(Color(part.guide)))
+        Spacer(Modifier.width(4.dp))
+        PixelText(name, 12.sp)
     }
 }
 

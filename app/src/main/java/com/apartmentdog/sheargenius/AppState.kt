@@ -7,6 +7,7 @@ import android.graphics.ImageDecoder
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -58,6 +59,14 @@ class AppState(private val context: Context) {
     var selectedRef by mutableIntStateOf(0)
     var sampleSize by mutableIntStateOf(1)
 
+    var previewRx by mutableFloatStateOf(0.15f)
+    var previewRy by mutableFloatStateOf(-0.5f)
+    var previewZoom by mutableFloatStateOf(1f)
+    var previewOverlay by mutableStateOf(true)
+    var spin by mutableStateOf(false)
+    var miniPreview by mutableStateOf(false)
+        private set
+
     var canUndo by mutableStateOf(false)
         private set
     var canRedo by mutableStateOf(false)
@@ -71,6 +80,7 @@ class AppState(private val context: Context) {
     init {
         projectsDir.mkdirs()
         color = prefs.getInt("color", color)
+        miniPreview = prefs.getBoolean("miniPreview", false)
         migrateLegacy()
         refreshProjects()
         val last = prefs.getString("project", null)
@@ -492,6 +502,17 @@ class AppState(private val context: Context) {
         val idx = projects.indexOfFirst { it.id == projectId }
         if (idx >= 0) projects[idx] = projects[idx].copy(name = projectName, updated = now)
         savePrefs()
+    }
+
+    fun resetPreview() {
+        previewRx = 0.15f
+        previewRy = -0.5f
+        previewZoom = 1f
+    }
+
+    fun toggleMiniPreview() {
+        miniPreview = !miniPreview
+        prefs.edit().putBoolean("miniPreview", miniPreview).apply()
     }
 
     fun savePrefs() {
