@@ -24,7 +24,18 @@ jobs:
           gradle-version: '8.13'
 
       - name: Build release APK
-        run: gradle assembleRelease --no-daemon --stacktrace
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
+
+      - name: Report build errors
+        if: failure()
+        shell: bash
+        run: |
+          { grep -E '^e: ' build.log | head -40; echo; grep -A 25 'What went wrong' build.log | head -40; } > errors.txt || true
+          msg=$(sed -e 's/%/%25/g' errors.txt | awk '{printf "%s%%0A", $0}')
+          echo "::error title=Build errors::${msg}"
 
       - name: Name APK
         run: cp app/build/outputs/apk/release/app-release.apk ShearGenius-${{ github.run_number }}.apk
