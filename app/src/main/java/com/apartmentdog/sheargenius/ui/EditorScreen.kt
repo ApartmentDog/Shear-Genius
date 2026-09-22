@@ -140,7 +140,7 @@ fun EditorScreen(state: AppState) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    state.setSlim(target)
+                    state.changeModel(target)
                     pendingSlim = null
                 }) { Text("Convert") }
             },
@@ -165,7 +165,7 @@ fun EditorScreen(state: AppState) {
 
 private fun requestModel(state: AppState, slim: Boolean, ask: (Boolean) -> Unit) {
     if (state.slim == slim) return
-    if (state.armsHaveContent()) ask(slim) else state.setSlim(slim)
+    if (state.armsHaveContent()) ask(slim) else state.changeModel(slim)
 }
 
 @Composable

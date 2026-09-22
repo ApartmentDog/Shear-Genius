@@ -178,7 +178,7 @@ class AppState(private val context: Context) {
 
     fun armsHaveContent(): Boolean = SkinLayout.armsHaveContent(pixels, slim)
 
-    fun setSlim(target: Boolean) {
+    fun changeModel(target: Boolean) {
         if (target == slim) return
         push(UndoStep(pixels.copyOf(), slim))
         pixels = SkinLayout.convertArms(pixels, slim, target)
