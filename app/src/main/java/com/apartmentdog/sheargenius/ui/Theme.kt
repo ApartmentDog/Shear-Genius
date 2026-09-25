@@ -112,24 +112,48 @@ object Textures {
         }
     }
 
-    private val woolBase = 0xFFD85A30.toInt()
-    private val woolLight = 0xFFE8733F.toInt()
-    private val woolHigh = 0xFFF08A52.toInt()
-    private val woolDark = 0xFFC04E28.toInt()
-    private val woolDeep = 0xFFA8431F.toInt()
+    /**
+     * Original soft woven texture: each row is short horizontal strands in five
+     * close shades, with row starts offset to give a gentle diagonal flow.
+     */
+    val wool: ImageBitmap by lazy { woolTile(0xFFEB781E.toInt()) }
 
-    /** Original woven-fibre pattern: two diagonal stitch lines plus speckle. */
-    val wool: ImageBitmap by lazy {
-        tile(21) { x, y, r ->
-            val n = r.nextFloat()
-            when {
-                (x + 2 * y) % 5 == 0 && n < 0.8f -> woolDark
-                (2 * x + y) % 7 == 3 && n < 0.7f -> woolLight
-                n < 0.08f -> woolDeep
-                n < 0.16f -> woolHigh
-                else -> woolBase
+    fun woolTile(base: Int): ImageBitmap {
+        val r = Random(21)
+        val hsv = FloatArray(3)
+        android.graphics.Color.colorToHSV(base, hsv)
+        val shades = IntArray(5) { i ->
+            val step = i - 2
+            val c = floatArrayOf(
+                hsv[0],
+                (hsv[1] - step * 0.02f).coerceIn(0f, 1f),
+                (hsv[2] + step * 0.035f).coerceIn(0f, 1f)
+            )
+            android.graphics.Color.HSVToColor(c)
+        }
+        val weights = intArrayOf(1, 3, 4, 3, 1)
+        val lengths = intArrayOf(2, 3, 3, 4, 5)
+        val b = Bitmap.createBitmap(16, 16, Bitmap.Config.ARGB_8888)
+        for (y in 0 until 16) {
+            var x = (y * 3) % 16
+            var filled = 0
+            while (filled < 16) {
+                val len = lengths[r.nextInt(lengths.size)]
+                var pick = r.nextInt(12)
+                var shade = 0
+                while (pick >= weights[shade]) {
+                    pick -= weights[shade]
+                    shade++
+                }
+                for (k in 0 until len) {
+                    if (filled >= 16) break
+                    b.setPixel((x + k) % 16, y, shades[shade])
+                    filled++
+                }
+                x += len
             }
         }
+        return b.asImageBitmap()
     }
 
     private fun tile(seed: Int, fn: (Int, Int, Random) -> Int): ImageBitmap {
