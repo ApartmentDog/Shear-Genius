@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -64,7 +65,8 @@ fun PixelText(
     color: Color = Blocky.Text,
     modifier: Modifier = Modifier,
     maxLines: Int = Int.MAX_VALUE,
-    lineHeight: TextUnit = TextUnit.Unspecified
+    lineHeight: TextUnit = TextUnit.Unspecified,
+    textAlign: TextAlign? = null
 ) {
     Text(
         text = text,
@@ -74,6 +76,7 @@ fun PixelText(
         fontFamily = LocalPixelFont.current,
         maxLines = maxLines,
         lineHeight = lineHeight,
+        textAlign = textAlign,
         overflow = TextOverflow.Ellipsis
     )
 }

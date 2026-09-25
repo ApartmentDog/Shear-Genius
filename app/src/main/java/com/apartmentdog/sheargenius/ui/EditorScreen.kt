@@ -54,6 +54,11 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.MutableIntState
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.widthIn
 import com.apartmentdog.sheargenius.AppState
 import com.apartmentdog.sheargenius.Screen
 import com.apartmentdog.sheargenius.Tool
@@ -67,6 +72,20 @@ import kotlin.math.roundToInt
 fun EditorScreen(state: AppState) {
     var pendingSlim by remember { mutableStateOf<Boolean?>(null) }
     var showColor by remember { mutableStateOf(false) }
+    val scale = remember { mutableFloatStateOf(1f) }
+    val offset = remember { mutableStateOf(Offset.Zero) }
+    val canvasPx = remember { mutableIntStateOf(0) }
+
+    fun zoomBy(f: Float) {
+        val s = canvasPx.intValue.toFloat()
+        if (s <= 0f) return
+        val old = scale.floatValue
+        val ns = (old * f).coerceIn(1f, 12f)
+        val c = Offset(s / 2f, s / 2f)
+        val no = (offset.value - c) * (ns / old) + c
+        scale.floatValue = ns
+        offset.value = Offset(no.x.coerceIn(s - s * ns, 0f), no.y.coerceIn(s - s * ns, 0f))
+    }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
@@ -100,7 +119,26 @@ fun EditorScreen(state: AppState) {
                 }
             }
             Spacer(Modifier.height(10.dp))
-            SkinCanvas(state, Modifier.fillMaxWidth().aspectRatio(1f))
+            SkinCanvas(state, scale, offset, canvasPx, Modifier.fillMaxWidth().aspectRatio(1f))
+            Spacer(Modifier.height(8.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BlockButton(onClick = { zoomBy(1f / 1.5f) }, icon = PixelIcons.Minus, enabled = scale.floatValue > 1f)
+                PixelText(
+                    "${(scale.floatValue * 100).roundToInt()}%",
+                    14.sp,
+                    modifier = Modifier.widthIn(min = 56.dp),
+                    textAlign = TextAlign.Center
+                )
+                BlockButton(onClick = { zoomBy(1.5f) }, icon = PixelIcons.Plus, enabled = scale.floatValue < 12f)
+                BlockButton(onClick = {
+                    scale.floatValue = 1f
+                    offset.value = Offset.Zero
+                }, label = "Fit")
+            }
             Spacer(Modifier.height(8.dp))
             if (state.miniPreview) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -262,9 +300,13 @@ private fun LegendItem(name: String, part: Part) {
 }
 
 @Composable
-private fun SkinCanvas(state: AppState, modifier: Modifier) {
-    val scale = remember { mutableFloatStateOf(1f) }
-    val offset = remember { mutableStateOf(Offset.Zero) }
+private fun SkinCanvas(
+    state: AppState,
+    scale: MutableFloatState,
+    offset: MutableState<Offset>,
+    canvasPx: MutableIntState,
+    modifier: Modifier
+) {
     val bitmap = remember { Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888) }
     val image = remember(bitmap) { bitmap.asImageBitmap() }
     val buffer = remember { IntArray(SkinLayout.COUNT) }
@@ -298,6 +340,7 @@ private fun SkinCanvas(state: AppState, modifier: Modifier) {
     Canvas(
         modifier
             .insetFrame()
+            .onSizeChanged { canvasPx.intValue = it.width }
             .clipToBounds()
             .pointerInput(Unit) { editorGestures(state, scale, offset) }
     ) {
