@@ -1,6 +1,8 @@
 package com.apartmentdog.sheargenius.ui
 
 import android.graphics.Bitmap
+import android.graphics.Paint
+import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -42,9 +44,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -115,11 +120,15 @@ fun EditorScreen(state: AppState) {
                     Spacer(Modifier.width(12.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Legend(compact = true)
+                        LabelsButton(state)
                         PixelText("Tap the model for the full preview", 11.sp)
                     }
                 }
             } else {
-                Legend(compact = false)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { Legend(compact = true) }
+                    LabelsButton(state)
+                }
             }
         }
 
@@ -230,6 +239,20 @@ private fun Legend(compact: Boolean) {
 }
 
 @Composable
+private fun LabelsButton(state: AppState) {
+    BlockButton(onClick = { state.toggleLabels() }, label = "Labels", selected = state.showLabels)
+}
+
+private val ZONE_LABELS = mapOf(
+    "head" to "Head", "hat" to "Hat",
+    "body" to "Body", "jacket" to "Jacket",
+    "rarm" to "R arm", "rsleeve" to "R sleeve",
+    "larm" to "L arm", "lsleeve" to "L sleeve",
+    "rleg" to "R leg", "rpants" to "R pants",
+    "lleg" to "L leg", "lpants" to "L pants"
+)
+
+@Composable
 private fun LegendItem(name: String, part: Part) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(10.dp).background(Color(part.guide)))
@@ -245,6 +268,32 @@ private fun SkinCanvas(state: AppState, modifier: Modifier) {
     val bitmap = remember { Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888) }
     val image = remember(bitmap) { bitmap.asImageBitmap() }
     val buffer = remember { IntArray(SkinLayout.COUNT) }
+    val context = LocalContext.current
+    val typeface = remember {
+        try {
+            Typeface.createFromAsset(context.assets, "fonts/pixelify.ttf")
+        } catch (e: Exception) {
+            Typeface.MONOSPACE
+        }
+    }
+    val labelFill = remember(typeface) {
+        Paint().apply {
+            isAntiAlias = true
+            color = android.graphics.Color.WHITE
+            textAlign = Paint.Align.CENTER
+            this.typeface = typeface
+        }
+    }
+    val labelStroke = remember(typeface) {
+        Paint().apply {
+            isAntiAlias = true
+            color = 0xFF2C2C2A.toInt()
+            textAlign = Paint.Align.CENTER
+            style = Paint.Style.STROKE
+            strokeJoin = Paint.Join.ROUND
+            this.typeface = typeface
+        }
+    }
 
     Canvas(
         modifier
@@ -310,6 +359,22 @@ private fun SkinCanvas(state: AppState, modifier: Modifier) {
             val p = i * cell
             drawLine(c, Offset(o.x + p, o.y), Offset(o.x + p, o.y + full), 1f)
             drawLine(c, Offset(o.x, o.y + p), Offset(o.x + full, o.y + p), 1f)
+        }
+        if (state.showLabels) {
+            val ts = 11.sp.toPx()
+            labelFill.textSize = ts
+            labelStroke.textSize = ts
+            labelStroke.strokeWidth = ts / 4f
+            drawIntoCanvas { canvas ->
+                val nc = canvas.nativeCanvas
+                for (b in boxes) {
+                    val label = ZONE_LABELS[b.id] ?: continue
+                    val lx = o.x + (b.u + b.d + b.w) * cell
+                    val ly = o.y + (b.v + (b.d + b.h) / 2f) * cell + ts / 3f
+                    nc.drawText(label, lx, ly, labelStroke)
+                    nc.drawText(label, lx, ly, labelFill)
+                }
+            }
         }
     }
 }

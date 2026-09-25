@@ -69,6 +69,8 @@ class AppState(private val context: Context) {
         private set
     var miniPreview by mutableStateOf(false)
         private set
+    var showLabels by mutableStateOf(true)
+        private set
 
     var canUndo by mutableStateOf(false)
         private set
@@ -85,6 +87,7 @@ class AppState(private val context: Context) {
         color = prefs.getInt("color", color)
         miniPreview = prefs.getBoolean("miniPreview", false)
         previewBg = prefs.getInt("previewBg", 0)
+        showLabels = prefs.getBoolean("labels", true)
         migrateLegacy()
         refreshProjects()
         val last = prefs.getString("project", null)
@@ -521,6 +524,11 @@ class AppState(private val context: Context) {
     fun changePreviewBg(index: Int) {
         previewBg = index
         prefs.edit().putInt("previewBg", index).apply()
+    }
+
+    fun toggleLabels() {
+        showLabels = !showLabels
+        prefs.edit().putBoolean("labels", showLabels).apply()
     }
 
     fun toggleMiniPreview() {
