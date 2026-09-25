@@ -20,7 +20,9 @@ import java.io.File
 import java.io.OutputStream
 import kotlin.concurrent.thread
 
-enum class Tool { PENCIL, ERASER, LINE, FILL, EYEDROPPER, MOVE }
+enum class Tool { PENCIL, ERASER, LINE, FILL, EYEDROPPER, SHADE, MOVE }
+
+enum class ShadeMode { LIGHTEN, DARKEN, DITHER, NOISE }
 
 enum class Screen { EDITOR, REFERENCE, PREVIEW, FILES }
 
@@ -45,6 +47,7 @@ class AppState(private val context: Context) {
     var overlayVisible by mutableStateOf(true)
     var tool by mutableStateOf(Tool.PENCIL)
     var mirror by mutableStateOf(false)
+    var shadeMode by mutableStateOf(ShadeMode.LIGHTEN)
     var color by mutableIntStateOf(0xFFD85A30.toInt())
     val palette = mutableStateListOf<Int>()
     var screen by mutableStateOf(Screen.EDITOR)
@@ -123,6 +126,63 @@ class AppState(private val context: Context) {
             }
         }
         return changed
+    }
+
+    /** Shade tool: each pixel is affected at most once per stroke (tracked in [visited]). */
+    fun shade(i: Int, visited: MutableSet<Int>): Boolean {
+        var changed = false
+        fun one(j: Int) {
+            if (j < 0 || !isEditable(j) || !visited.add(j)) return
+            val p = pixels[j]
+            if (shadeMode == ShadeMode.DITHER) {
+                val x = j % SkinLayout.SIZE
+                val y = j / SkinLayout.SIZE
+                if ((x + y) % 2 == 0 && p != color) {
+                    pixels[j] = color
+                    changed = true
+                }
+                return
+            }
+            if ((p ushr 24) == 0) return
+            val np = adjustShade(p)
+            if (np != p) {
+                pixels[j] = np
+                changed = true
+            }
+        }
+        one(i)
+        if (mirror) one(SkinLayout.mirror(slim, i))
+        return changed
+    }
+
+    private fun adjustShade(p: Int): Int {
+        val hsv = FloatArray(3)
+        android.graphics.Color.colorToHSV(p, hsv)
+        fun towards(h: Float, target: Float, amount: Float): Float {
+            var diff = target - h
+            if (diff > 180f) diff -= 360f
+            if (diff < -180f) diff += 360f
+            val step = if (kotlin.math.abs(diff) < amount) diff else kotlin.math.sign(diff) * amount
+            return (h + step + 360f) % 360f
+        }
+        when (shadeMode) {
+            ShadeMode.LIGHTEN -> {
+                hsv[2] = (hsv[2] + 0.08f).coerceAtMost(1f)
+                hsv[1] = (hsv[1] - 0.04f).coerceAtLeast(0f)
+                if (hsv[1] > 0.05f) hsv[0] = towards(hsv[0], 60f, 4f)
+            }
+            ShadeMode.DARKEN -> {
+                hsv[2] = (hsv[2] - 0.08f).coerceAtLeast(0f)
+                hsv[1] = (hsv[1] + 0.04f).coerceAtMost(1f)
+                if (hsv[1] > 0.05f) hsv[0] = towards(hsv[0], 240f, 4f)
+            }
+            ShadeMode.NOISE -> {
+                val d = (kotlin.random.Random.nextFloat() - 0.5f) * 0.12f
+                hsv[2] = (hsv[2] + d).coerceIn(0f, 1f)
+            }
+            ShadeMode.DITHER -> {}
+        }
+        return android.graphics.Color.HSVToColor(p ushr 24, hsv)
     }
 
     fun fill(start: Int, c: Int): Boolean {

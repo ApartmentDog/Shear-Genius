@@ -60,6 +60,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.widthIn
 import com.apartmentdog.sheargenius.AppState
+import com.apartmentdog.sheargenius.ShadeMode
 import com.apartmentdog.sheargenius.Screen
 import com.apartmentdog.sheargenius.Tool
 import com.apartmentdog.sheargenius.model.Part
@@ -162,16 +163,33 @@ fun EditorScreen(state: AppState) {
 
         Row(
             Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)
+            horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally)
         ) {
             ToolSlot(state, Tool.PENCIL, PixelIcons.Pencil)
             ToolSlot(state, Tool.ERASER, PixelIcons.Eraser)
             ToolSlot(state, Tool.LINE, PixelIcons.Line)
             ToolSlot(state, Tool.FILL, PixelIcons.Bucket)
             ToolSlot(state, Tool.EYEDROPPER, PixelIcons.Dropper)
+            ToolSlot(state, Tool.SHADE, PixelIcons.Shade)
             ToolSlot(state, Tool.MOVE, PixelIcons.Move)
-            Slot(size = 40.dp, selected = state.mirror, onClick = { state.mirror = !state.mirror }) {
-                PixelIconView(PixelIcons.Mirror, Blocky.IconDark, Modifier.size(22.dp))
+            Slot(size = 36.dp, selected = state.mirror, onClick = { state.mirror = !state.mirror }) {
+                PixelIconView(PixelIcons.Mirror, Blocky.IconDark, Modifier.size(20.dp))
+            }
+        }
+
+        if (state.tool == Tool.SHADE) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)
+            ) {
+                listOf(
+                    ShadeMode.LIGHTEN to "Lighten",
+                    ShadeMode.DARKEN to "Darken",
+                    ShadeMode.DITHER to "Dither",
+                    ShadeMode.NOISE to "Noise"
+                ).forEach { (mode, label) ->
+                    BlockButton(onClick = { state.shadeMode = mode }, label = label, selected = state.shadeMode == mode)
+                }
             }
         }
 
@@ -236,8 +254,8 @@ private fun requestModel(state: AppState, slim: Boolean, ask: (Boolean) -> Unit)
 
 @Composable
 private fun ToolSlot(state: AppState, tool: Tool, icon: PixelIcon) {
-    Slot(size = 40.dp, selected = state.tool == tool, onClick = { state.tool = tool }) {
-        PixelIconView(icon, Blocky.IconDark, Modifier.size(22.dp))
+    Slot(size = 36.dp, selected = state.tool == tool, onClick = { state.tool = tool }) {
+        PixelIconView(icon, Blocky.IconDark, Modifier.size(20.dp))
     }
 }
 
@@ -401,12 +419,18 @@ private suspend fun PointerInputScope.editorGestures(
             }
             val c = if (state.tool == Tool.ERASER) 0 else state.color
             val from = last ?: cur
-            line(from, cur) { x, y -> if (state.setPixel(y * 64 + x, c)) changed = true }
+            line(from, cur) { x, y ->
+                val idx = y * 64 + x
+                val hit = if (shading) state.shade(idx, visited) else state.setPixel(idx, c)
+                if (hit) changed = true
+            }
             last = cur
             state.touched()
         }
 
-        val pen = state.tool == Tool.PENCIL || state.tool == Tool.ERASER
+        val shading = state.tool == Tool.SHADE
+        val pen = state.tool == Tool.PENCIL || state.tool == Tool.ERASER || shading
+        val visited = HashSet<Int>()
         val moving = state.tool == Tool.MOVE
         val lineStart = if (state.tool == Tool.LINE) toSkin(down.position) else null
 
@@ -434,6 +458,7 @@ private suspend fun PointerInputScope.editorGestures(
                         state.restore(before)
                         changed = false
                     }
+                    visited.clear()
                 }
                 val zoom = event.calculateZoom()
                 val pan = event.calculatePan()

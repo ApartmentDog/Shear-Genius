@@ -149,6 +149,14 @@ object PixelIcons {
         "...##...",
         "...##..."
     ))
+    val Shade = PixelIcon(listOf(
+        "####oo..",
+        "####oo..",
+        "###ooo..",
+        "###oo...",
+        "##ooo...",
+        "##oo...."
+    ))
     val Move = PixelIcon(listOf(
         "....#....",
         "...###...",
