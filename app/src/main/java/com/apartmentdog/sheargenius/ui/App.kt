@@ -50,16 +50,16 @@ fun ShearGeniusApp(state: AppState) {
 private fun Header(state: AppState) {
     Row(
         Modifier
-            .statusBarsPadding()
             .fillMaxWidth()
-            .height(72.dp)
-            .tiled(Textures.grass, 72.dp)
-            .padding(start = 12.dp, end = 12.dp, top = 18.dp, bottom = 4.dp),
+            .tiled(Textures.wool, 48.dp)
+            .statusBarsPadding()
+            .height(60.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            PixelText("Shear Genius", 18.sp, Color.White, maxLines = 1, lineHeight = 21.sp)
-            PixelText(state.projectName, 12.sp, Color(0xFFF1EFE8), maxLines = 1, lineHeight = 15.sp)
+            PixelText("Shear Genius", 18.sp, Color.White, maxLines = 1, lineHeight = 21.sp, shadow = true)
+            PixelText(state.projectName, 12.sp, Color(0xFFFAECE7), maxLines = 1, lineHeight = 15.sp, shadow = true)
         }
         Spacer(Modifier.width(8.dp))
         if (state.screen == Screen.EDITOR) {

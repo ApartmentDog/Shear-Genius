@@ -107,40 +107,39 @@ fun EditorScreen(state: AppState) {
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     BlockButton(
-                        onClick = { state.toggleMiniPreview() },
-                        label = "3D",
-                        selected = state.miniPreview
-                    )
-                    BlockButton(
                         onClick = { state.overlayVisible = !state.overlayVisible },
                         label = "Overlay",
                         selected = state.overlayVisible
                     )
+                    BlockButton(onClick = { state.toggleLabels() }, label = "Labels", selected = state.showLabels)
                 }
             }
             Spacer(Modifier.height(10.dp))
             SkinCanvas(state, scale, offset, canvasPx, Modifier.fillMaxWidth().aspectRatio(1f))
-            Spacer(Modifier.height(8.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                BlockButton(onClick = { zoomBy(1f / 1.5f) }, icon = PixelIcons.Minus, enabled = scale.floatValue > 1f)
-                PixelText(
-                    "${(scale.floatValue * 100).roundToInt()}%",
-                    14.sp,
-                    modifier = Modifier.widthIn(min = 56.dp),
-                    textAlign = TextAlign.Center
-                )
-                BlockButton(onClick = { zoomBy(1.5f) }, icon = PixelIcons.Plus, enabled = scale.floatValue < 12f)
-                BlockButton(onClick = {
-                    scale.floatValue = 1f
-                    offset.value = Offset.Zero
-                }, label = "Fit")
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    BlockButton(onClick = { zoomBy(1f / 1.5f) }, icon = PixelIcons.Minus, enabled = scale.floatValue > 1f)
+                    PixelText(
+                        "${(scale.floatValue * 100).roundToInt()}%",
+                        14.sp,
+                        modifier = Modifier.widthIn(min = 48.dp),
+                        textAlign = TextAlign.Center
+                    )
+                    BlockButton(onClick = { zoomBy(1.5f) }, icon = PixelIcons.Plus, enabled = scale.floatValue < 12f)
+                    BlockButton(onClick = {
+                        scale.floatValue = 1f
+                        offset.value = Offset.Zero
+                    }, label = "Fit")
+                }
+                Spacer(Modifier.weight(1f))
+                BlockButton(onClick = { state.toggleMiniPreview() }, label = "3D", selected = state.miniPreview)
             }
-            Spacer(Modifier.height(8.dp))
             if (state.miniPreview) {
+                Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     SkinModelView(
                         state = state,
@@ -156,43 +155,32 @@ fun EditorScreen(state: AppState) {
                             .clickable { state.screen = Screen.PREVIEW }
                     )
                     Spacer(Modifier.width(12.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Legend(compact = true)
-                        LabelsButton(state)
-                        PixelText("Tap the model for the full preview", 11.sp)
-                    }
-                }
-            } else {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.weight(1f)) { Legend(compact = true) }
-                    LabelsButton(state)
+                    PixelText("Tap the model for the full preview", 12.sp, modifier = Modifier.weight(1f))
                 }
             }
         }
 
         Row(
             Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)
         ) {
             ToolSlot(state, Tool.PENCIL, PixelIcons.Pencil)
             ToolSlot(state, Tool.ERASER, PixelIcons.Eraser)
             ToolSlot(state, Tool.LINE, PixelIcons.Line)
             ToolSlot(state, Tool.FILL, PixelIcons.Bucket)
             ToolSlot(state, Tool.EYEDROPPER, PixelIcons.Dropper)
-            Slot(selected = state.mirror, onClick = { state.mirror = !state.mirror }) {
-                PixelIconView(PixelIcons.Mirror, Blocky.IconDark, Modifier.size(24.dp))
+            ToolSlot(state, Tool.MOVE, PixelIcons.Move)
+            Slot(size = 40.dp, selected = state.mirror, onClick = { state.mirror = !state.mirror }) {
+                PixelIconView(PixelIcons.Mirror, Blocky.IconDark, Modifier.size(22.dp))
             }
         }
 
         Panel(Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Slot(size = 52.dp, onClick = { showColor = true }) {
-                    Box(Modifier.size(30.dp).background(Color(state.color)))
+                Slot(size = 48.dp, onClick = { showColor = true }) {
+                    Box(Modifier.size(28.dp).background(Color(state.color)))
                 }
-                Column(Modifier.weight(1f)) {
-                    PixelText(hexOf(state.color), 16.sp)
-                    PixelText("Tap the swatch to edit", 12.sp)
-                }
+                PixelText(hexOf(state.color), 16.sp, modifier = Modifier.weight(1f))
                 BlockButton(onClick = { state.addToPalette(state.color) }, icon = PixelIcons.Plus, label = "Save")
             }
             Spacer(Modifier.height(10.dp))
@@ -202,8 +190,6 @@ fun EditorScreen(state: AppState) {
                 onPick = { state.color = it },
                 onRemove = { state.removeFromPalette(it) }
             )
-            Spacer(Modifier.height(6.dp))
-            PixelText("Long-press a color to remove it", 11.sp)
         }
     }
 
@@ -250,35 +236,9 @@ private fun requestModel(state: AppState, slim: Boolean, ask: (Boolean) -> Unit)
 
 @Composable
 private fun ToolSlot(state: AppState, tool: Tool, icon: PixelIcon) {
-    Slot(selected = state.tool == tool, onClick = { state.tool = tool }) {
-        PixelIconView(icon, Blocky.IconDark, Modifier.size(24.dp))
+    Slot(size = 40.dp, selected = state.tool == tool, onClick = { state.tool = tool }) {
+        PixelIconView(icon, Blocky.IconDark, Modifier.size(22.dp))
     }
-}
-
-@Composable
-private fun Legend(compact: Boolean) {
-    val items = listOf("Head" to Part.HEAD, "Body" to Part.BODY, "Arms" to Part.ARM, "Legs" to Part.LEG)
-    if (compact) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            items.chunked(2).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    row.forEach { (name, part) -> LegendItem(name, part) }
-                }
-            }
-        }
-    } else {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
-        ) {
-            items.forEach { (name, part) -> LegendItem(name, part) }
-        }
-    }
-}
-
-@Composable
-private fun LabelsButton(state: AppState) {
-    BlockButton(onClick = { state.toggleLabels() }, label = "Labels", selected = state.showLabels)
 }
 
 private val ZONE_LABELS = mapOf(
@@ -289,15 +249,6 @@ private val ZONE_LABELS = mapOf(
     "rleg" to "R leg", "rpants" to "R pants",
     "lleg" to "L leg", "lpants" to "L pants"
 )
-
-@Composable
-private fun LegendItem(name: String, part: Part) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(10.dp).background(Color(part.guide)))
-        Spacer(Modifier.width(4.dp))
-        PixelText(name, 12.sp)
-    }
-}
 
 @Composable
 private fun SkinCanvas(
@@ -456,6 +407,7 @@ private suspend fun PointerInputScope.editorGestures(
         }
 
         val pen = state.tool == Tool.PENCIL || state.tool == Tool.ERASER
+        val moving = state.tool == Tool.MOVE
         val lineStart = if (state.tool == Tool.LINE) toSkin(down.position) else null
 
         fun previewLine(p: Offset) {
@@ -497,8 +449,18 @@ private suspend fun PointerInputScope.editorGestures(
                 scale.floatValue = ns
                 offset.value = no
             } else if (!multi && pressed == 1) {
-                val pos = event.changes.first { it.pressed }.position
-                if (pen) stroke(pos) else if (lineStart != null) previewLine(pos)
+                if (moving) {
+                    val pan = event.calculatePan()
+                    val full = size.width * scale.floatValue
+                    val no = offset.value + pan
+                    offset.value = Offset(
+                        no.x.coerceIn(size.width - full, 0f),
+                        no.y.coerceIn(size.height - full, 0f)
+                    )
+                } else {
+                    val pos = event.changes.first { it.pressed }.position
+                    if (pen) stroke(pos) else if (lineStart != null) previewLine(pos)
+                }
             }
             event.changes.forEach { if (it.positionChanged()) it.consume() }
         } while (event.changes.any { it.pressed })

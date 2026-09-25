@@ -3,6 +3,7 @@ package com.apartmentdog.sheargenius.ui
 import android.graphics.Bitmap
 import android.graphics.Typeface
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -14,6 +15,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -66,7 +68,8 @@ fun PixelText(
     modifier: Modifier = Modifier,
     maxLines: Int = Int.MAX_VALUE,
     lineHeight: TextUnit = TextUnit.Unspecified,
-    textAlign: TextAlign? = null
+    textAlign: TextAlign? = null,
+    shadow: Boolean = false
 ) {
     Text(
         text = text,
@@ -77,7 +80,12 @@ fun PixelText(
         maxLines = maxLines,
         lineHeight = lineHeight,
         textAlign = textAlign,
-        overflow = TextOverflow.Ellipsis
+        overflow = TextOverflow.Ellipsis,
+        style = if (shadow) {
+            LocalTextStyle.current.copy(shadow = Shadow(Color(0x99000000), Offset(3f, 3f), 0f))
+        } else {
+            LocalTextStyle.current
+        }
     )
 }
 
@@ -101,6 +109,26 @@ object Textures {
         }
         tile(12) { x, y, rr ->
             if (y < depth[x]) grassColors[rr.nextInt(grassColors.size)] else dirtColors[rr.nextInt(dirtColors.size)]
+        }
+    }
+
+    private val woolBase = 0xFFD85A30.toInt()
+    private val woolLight = 0xFFE8733F.toInt()
+    private val woolHigh = 0xFFF08A52.toInt()
+    private val woolDark = 0xFFC04E28.toInt()
+    private val woolDeep = 0xFFA8431F.toInt()
+
+    /** Original woven-fibre pattern: two diagonal stitch lines plus speckle. */
+    val wool: ImageBitmap by lazy {
+        tile(21) { x, y, r ->
+            val n = r.nextFloat()
+            when {
+                (x + 2 * y) % 5 == 0 && n < 0.8f -> woolDark
+                (2 * x + y) % 7 == 3 && n < 0.7f -> woolLight
+                n < 0.08f -> woolDeep
+                n < 0.16f -> woolHigh
+                else -> woolBase
+            }
         }
     }
 

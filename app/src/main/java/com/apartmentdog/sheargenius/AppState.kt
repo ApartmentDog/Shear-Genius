@@ -20,7 +20,7 @@ import java.io.File
 import java.io.OutputStream
 import kotlin.concurrent.thread
 
-enum class Tool { PENCIL, ERASER, LINE, FILL, EYEDROPPER }
+enum class Tool { PENCIL, ERASER, LINE, FILL, EYEDROPPER, MOVE }
 
 enum class Screen { EDITOR, REFERENCE, PREVIEW, FILES }
 
