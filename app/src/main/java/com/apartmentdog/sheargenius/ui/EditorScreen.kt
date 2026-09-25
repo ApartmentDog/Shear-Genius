@@ -403,6 +403,8 @@ private suspend fun PointerInputScope.editorGestures(
         var multi = false
         var changed = false
         var last: IntOffset? = null
+        val shading = state.tool == Tool.SHADE
+        val visited = HashSet<Int>()
 
         fun toSkin(p: Offset): IntOffset? {
             val cell = size.width * scale.floatValue / 64f
@@ -428,9 +430,7 @@ private suspend fun PointerInputScope.editorGestures(
             state.touched()
         }
 
-        val shading = state.tool == Tool.SHADE
         val pen = state.tool == Tool.PENCIL || state.tool == Tool.ERASER || shading
-        val visited = HashSet<Int>()
         val moving = state.tool == Tool.MOVE
         val lineStart = if (state.tool == Tool.LINE) toSkin(down.position) else null
 
