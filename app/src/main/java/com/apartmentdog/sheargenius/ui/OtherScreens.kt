@@ -231,6 +231,9 @@ private fun ProjectRow(info: ProjectInfo, current: Boolean, thumb: File, onOpen:
                 Color.White
             )
         }
+        Slot(size = 36.dp, onClick = onMenu) {
+            PixelText("\u22ee", 16.sp, Color.White)
+        }
     }
 }
 

@@ -37,6 +37,7 @@ import com.apartmentdog.sheargenius.MAX_LAYERS
 fun LayersDialog(state: AppState, onDismiss: () -> Unit) {
     var renaming by remember { mutableStateOf(false) }
     var text by remember { mutableStateOf("") }
+    var confirmDelete by remember { mutableStateOf(false) }
     val active = state.activeLayer
 
     Dialog(onDismissRequest = onDismiss) {
@@ -98,7 +99,7 @@ fun LayersDialog(state: AppState, onDismiss: () -> Unit) {
                     BlockButton(onClick = { state.moveLayer(true) }, icon = PixelIcons.Up, enabled = active < state.layers.lastIndex)
                     BlockButton(onClick = { state.moveLayer(false) }, icon = PixelIcons.Down, enabled = active > 0)
                     BlockButton(onClick = { state.mergeDown() }, label = "Merge down", enabled = active > 0)
-                    BlockButton(onClick = { state.deleteLayer() }, label = "Delete", enabled = state.layers.size > 1)
+                    BlockButton(onClick = { confirmDelete = true }, label = "Delete", enabled = state.layers.size > 1)
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -106,6 +107,23 @@ fun LayersDialog(state: AppState, onDismiss: () -> Unit) {
                 }
             }
         }
+    }
+
+    if (confirmDelete) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { androidx.compose.material3.Text("Delete this layer?") },
+            text = { androidx.compose.material3.Text("Its pixels are removed. You can undo this from the Editor.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    state.deleteLayer()
+                    confirmDelete = false
+                }) { androidx.compose.material3.Text("Delete") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { confirmDelete = false }) { androidx.compose.material3.Text("Cancel") }
+            }
+        )
     }
 }
 

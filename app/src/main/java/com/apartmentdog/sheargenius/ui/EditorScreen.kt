@@ -181,6 +181,9 @@ fun EditorScreen(state: AppState) {
                 PixelIconView(PixelIcons.Mirror, Blocky.IconDark, Modifier.size(20.dp))
             }
         }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            PixelText(TOOL_NAMES[state.tool] ?: "", 12.sp)
+        }
 
         val activeName = state.layers.getOrNull(state.activeLayer)?.let { if (it.visible) it.name else it.name + " (hidden)" } ?: ""
         BlockButton(
@@ -342,6 +345,12 @@ private fun ToolSlot(state: AppState, tool: Tool, icon: PixelIcon) {
         PixelIconView(icon, Blocky.IconDark, Modifier.size(20.dp))
     }
 }
+
+private val TOOL_NAMES = mapOf(
+    Tool.PENCIL to "Pencil", Tool.ERASER to "Eraser", Tool.LINE to "Line",
+    Tool.FILL to "Fill", Tool.EYEDROPPER to "Eyedropper", Tool.SHADE to "Shade",
+    Tool.SELECT to "Select", Tool.MOVE to "Move canvas (drag with one finger)"
+)
 
 private val ZONE_LABELS = mapOf(
     "head" to "Head", "hat" to "Hat",
