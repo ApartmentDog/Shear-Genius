@@ -20,7 +20,14 @@ import java.io.File
 import java.io.OutputStream
 import kotlin.concurrent.thread
 
-enum class Tool { PENCIL, ERASER, LINE, FILL, EYEDROPPER, SHADE, MOVE }
+enum class Tool { PENCIL, ERASER, LINE, FILL, EYEDROPPER, SHADE, SELECT, MOVE }
+
+/** A rectangular pixel selection in skin-texture coordinates, inclusive bounds, clamped to 0..63. */
+data class SelRect(val x0: Int, val y0: Int, val x1: Int, val y1: Int) {
+    val w: Int get() = x1 - x0 + 1
+    val h: Int get() = y1 - y0 + 1
+    fun clamped(): SelRect = SelRect(x0.coerceIn(0, 63), y0.coerceIn(0, 63), x1.coerceIn(0, 63), y1.coerceIn(0, 63))
+}
 
 enum class ShadeMode { LIGHTEN, DARKEN, SHINE, NOISE, NOISY_PEN, DITHER }
 
@@ -57,6 +64,13 @@ class AppState(private val context: Context) {
     var tool by mutableStateOf(Tool.PENCIL)
     var mirror by mutableStateOf(false)
     var shadeMode by mutableStateOf(ShadeMode.LIGHTEN)
+    var selection by mutableStateOf<SelRect?>(null)
+    var selectMoveArmed by mutableStateOf(false)
+    var hasClipboard by mutableStateOf(false)
+        private set
+    private var clipboard: IntArray? = null
+    private var clipW = 0
+    private var clipH = 0
     var shadeAmount by mutableFloatStateOf(0.5f)
     var color by mutableIntStateOf(0xFFD85A30.toInt())
     val palette = mutableStateListOf<Int>()
@@ -305,25 +319,155 @@ class AppState(private val context: Context) {
             val src = layer.pixels
             for (i in 0 until SkinLayout.COUNT) {
                 val s = src[i]
-                val sa = s ushr 24
-                if (sa == 0) continue
-                if (sa == 255) {
-                    out[i] = s
-                    continue
-                }
-                val d = out[i]
-                val da = d ushr 24
-                val outA = sa + da * (255 - sa) / 255
-                if (outA == 0) continue
-                fun ch(shift: Int): Int {
-                    val sc = (s shr shift) and 0xFF
-                    val dc = (d shr shift) and 0xFF
-                    return ((sc * sa + dc * da * (255 - sa) / 255) / outA).coerceIn(0, 255)
-                }
-                out[i] = (outA shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
+                if ((s ushr 24) == 0) continue
+                out[i] = blendOver(s, out[i])
             }
         }
         return out
+    }
+
+    /** Source-over blend of [s] atop [d], both ARGB. */
+    private fun blendOver(s: Int, d: Int): Int {
+        val sa = s ushr 24
+        if (sa == 255 || (d ushr 24) == 0) return s
+        if (sa == 0) return d
+        val da = d ushr 24
+        val outA = sa + da * (255 - sa) / 255
+        if (outA == 0) return 0
+        fun ch(shift: Int): Int {
+            val sc = (s shr shift) and 0xFF
+            val dc = (d shr shift) and 0xFF
+            return ((sc * sa + dc * da * (255 - sa) / 255) / outA).coerceIn(0, 255)
+        }
+        return (outA shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
+    }
+
+    // ---- selection
+
+    fun setSelection(r: SelRect?) {
+        selection = r?.clamped()
+        selectMoveArmed = false
+    }
+
+    fun copySelection() {
+        val r = selection ?: return
+        val buf = IntArray(r.w * r.h)
+        for (y in 0 until r.h) for (x in 0 until r.w) buf[y * r.w + x] = pixels[(r.y0 + y) * SkinLayout.SIZE + (r.x0 + x)]
+        clipboard = buf
+        clipW = r.w
+        clipH = r.h
+        hasClipboard = true
+    }
+
+    fun pasteSelection() {
+        val cb = clipboard ?: return
+        val r = selection
+        val ox = r?.x0 ?: 0
+        val oy = r?.y0 ?: 0
+        val before = copyPixels()
+        var changed = false
+        for (y in 0 until clipH) for (x in 0 until clipW) {
+            val s = cb[y * clipW + x]
+            if ((s ushr 24) == 0) continue
+            val px = ox + x
+            val py = oy + y
+            if (px !in 0 until SkinLayout.SIZE || py !in 0 until SkinLayout.SIZE) continue
+            val idx = py * SkinLayout.SIZE + px
+            if (!isEditable(idx)) continue
+            val np = blendOver(s, pixels[idx])
+            if (pixels[idx] != np) {
+                pixels[idx] = np
+                changed = true
+            }
+        }
+        selection = SelRect(ox, oy, ox + clipW - 1, oy + clipH - 1).clamped()
+        if (changed) {
+            touched()
+            commit(before)
+        }
+    }
+
+    fun deleteSelection() {
+        val r = selection ?: return
+        val before = copyPixels()
+        var changed = false
+        for (y in r.y0..r.y1) for (x in r.x0..r.x1) {
+            val idx = y * SkinLayout.SIZE + x
+            if (isEditable(idx) && pixels[idx] != 0) {
+                pixels[idx] = 0
+                changed = true
+            }
+        }
+        if (changed) {
+            touched()
+            commit(before)
+        }
+    }
+
+    fun flipSelection(horizontal: Boolean) {
+        val r = selection ?: return
+        val before = copyPixels()
+        val buf = IntArray(r.w * r.h)
+        for (y in 0 until r.h) for (x in 0 until r.w) buf[y * r.w + x] = pixels[(r.y0 + y) * SkinLayout.SIZE + (r.x0 + x)]
+        var changed = false
+        for (y in 0 until r.h) for (x in 0 until r.w) {
+            val sx = if (horizontal) r.w - 1 - x else x
+            val sy = if (horizontal) y else r.h - 1 - y
+            val idx = (r.y0 + y) * SkinLayout.SIZE + (r.x0 + x)
+            if (!isEditable(idx)) continue
+            val v = buf[sy * r.w + sx]
+            if (pixels[idx] != v) {
+                pixels[idx] = v
+                changed = true
+            }
+        }
+        if (changed) {
+            touched()
+            commit(before)
+        }
+    }
+
+    fun armMove() {
+        if (selection != null) selectMoveArmed = true
+    }
+
+    fun disarmMove() {
+        selectMoveArmed = false
+    }
+
+    /**
+     * Redraws the move preview from [original] (a snapshot taken when the drag started):
+     * clears [start]'s area and repaints its content offset by ([dx],[dy]) pixels. Cheap
+     * enough to call on every pointer move since it always starts from the same snapshot.
+     */
+    fun previewMove(original: IntArray, start: SelRect, dx: Int, dy: Int) {
+        System.arraycopy(original, 0, pixels, 0, SkinLayout.COUNT)
+        val buf = IntArray(start.w * start.h)
+        for (y in 0 until start.h) for (x in 0 until start.w) {
+            buf[y * start.w + x] = original[(start.y0 + y) * SkinLayout.SIZE + (start.x0 + x)]
+        }
+        for (y in 0 until start.h) for (x in 0 until start.w) {
+            val idx = (start.y0 + y) * SkinLayout.SIZE + (start.x0 + x)
+            if (isEditable(idx)) pixels[idx] = 0
+        }
+        val nx0 = start.x0 + dx
+        val ny0 = start.y0 + dy
+        for (y in 0 until start.h) for (x in 0 until start.w) {
+            val px = nx0 + x
+            val py = ny0 + y
+            if (px !in 0 until SkinLayout.SIZE || py !in 0 until SkinLayout.SIZE) continue
+            val idx = py * SkinLayout.SIZE + px
+            if (!isEditable(idx)) continue
+            val s = buf[y * start.w + x]
+            if ((s ushr 24) != 0) pixels[idx] = s
+        }
+        selection = SelRect(nx0, ny0, nx0 + start.w - 1, ny0 + start.h - 1)
+        touched()
+    }
+
+    fun clearSelection() {
+        selection = null
+        selectMoveArmed = false
     }
 
     // ---- layers

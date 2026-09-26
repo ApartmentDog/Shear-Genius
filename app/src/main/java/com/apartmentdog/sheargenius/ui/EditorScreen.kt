@@ -62,6 +62,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.widthIn
 import com.apartmentdog.sheargenius.AppState
+import com.apartmentdog.sheargenius.SelRect
 import com.apartmentdog.sheargenius.ShadeMode
 import com.apartmentdog.sheargenius.Screen
 import com.apartmentdog.sheargenius.Tool
@@ -174,6 +175,7 @@ fun EditorScreen(state: AppState) {
             ToolSlot(state, Tool.FILL, PixelIcons.Bucket)
             ToolSlot(state, Tool.EYEDROPPER, PixelIcons.Dropper)
             ToolSlot(state, Tool.SHADE, PixelIcons.Shade)
+            ToolSlot(state, Tool.SELECT, PixelIcons.Select)
             ToolSlot(state, Tool.MOVE, PixelIcons.Move)
             Slot(size = 36.dp, selected = state.mirror, onClick = { state.mirror = !state.mirror }) {
                 PixelIconView(PixelIcons.Mirror, Blocky.IconDark, Modifier.size(20.dp))
@@ -233,6 +235,42 @@ fun EditorScreen(state: AppState) {
                             textAlign = TextAlign.End
                         )
                     }
+                }
+            }
+        }
+
+        if (state.tool == Tool.SELECT) {
+            Panel(Modifier.fillMaxWidth()) {
+                val sel = state.selection
+                PixelText(
+                    if (sel != null) "Selection: ${sel.w}\u00d7${sel.h}" else "Drag on the canvas to select a rectangle",
+                    13.sp
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BlockButton(onClick = { state.copySelection() }, label = "Copy", enabled = sel != null, modifier = Modifier.weight(1f))
+                    BlockButton(onClick = { state.pasteSelection() }, label = "Paste", enabled = state.hasClipboard, modifier = Modifier.weight(1f))
+                    BlockButton(onClick = { state.deleteSelection() }, label = "Delete", enabled = sel != null, modifier = Modifier.weight(1f))
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BlockButton(onClick = { state.flipSelection(true) }, label = "Flip H", enabled = sel != null, modifier = Modifier.weight(1f))
+                    BlockButton(onClick = { state.flipSelection(false) }, label = "Flip V", enabled = sel != null, modifier = Modifier.weight(1f))
+                    BlockButton(
+                        onClick = { state.armMove() },
+                        label = "Move",
+                        selected = state.selectMoveArmed,
+                        enabled = sel != null,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (sel != null) {
+                    Spacer(Modifier.height(8.dp))
+                    BlockButton(onClick = { state.clearSelection() }, label = "Deselect", modifier = Modifier.fillMaxWidth())
+                }
+                if (state.selectMoveArmed) {
+                    Spacer(Modifier.height(6.dp))
+                    PixelText("Drag anywhere on the canvas to move it.", 11.sp)
                 }
             }
         }
@@ -322,6 +360,7 @@ private fun SkinCanvas(
     canvasPx: MutableIntState,
     modifier: Modifier
 ) {
+    val marquee = remember { mutableStateOf<SelRect?>(null) }
     val bitmap = remember { Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888) }
     val image = remember(bitmap) { bitmap.asImageBitmap() }
     val buffer = remember { IntArray(SkinLayout.COUNT) }
@@ -357,7 +396,7 @@ private fun SkinCanvas(
             .insetFrame()
             .onSizeChanged { canvasPx.intValue = it.width }
             .clipToBounds()
-            .pointerInput(Unit) { editorGestures(state, scale, offset) }
+            .pointerInput(Unit) { editorGestures(state, scale, offset, marquee) }
     ) {
         @Suppress("UNUSED_VARIABLE")
         val v = state.version
@@ -418,6 +457,21 @@ private fun SkinCanvas(
             drawLine(c, Offset(o.x + p, o.y), Offset(o.x + p, o.y + full), 1f)
             drawLine(c, Offset(o.x, o.y + p), Offset(o.x + full, o.y + p), 1f)
         }
+        val shownSel = marquee.value ?: state.selection
+        if (shownSel != null && state.tool == Tool.SELECT) {
+            val rx0 = o.x + shownSel.x0 * cell
+            val ry0 = o.y + shownSel.y0 * cell
+            val rw = shownSel.w * cell
+            val rh = shownSel.h * cell
+            val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f)
+            drawRect(Color.White, Offset(rx0, ry0), Size(rw, rh), style = stroke)
+            drawRect(
+                Color.Black,
+                Offset(rx0 + 2f, ry0 + 2f),
+                Size((rw - 4f).coerceAtLeast(0f), (rh - 4f).coerceAtLeast(0f)),
+                style = stroke
+            )
+        }
         if (state.showLabels) {
             val ts = 11.sp.toPx()
             labelFill.textSize = ts
@@ -441,7 +495,8 @@ private fun SkinCanvas(
 private suspend fun PointerInputScope.editorGestures(
     state: AppState,
     scale: MutableFloatState,
-    offset: MutableState<Offset>
+    offset: MutableState<Offset>,
+    marquee: MutableState<SelRect?>
 ) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
@@ -457,6 +512,13 @@ private suspend fun PointerInputScope.editorGestures(
             val x = floor((p.x - offset.value.x) / cell).toInt()
             val y = floor((p.y - offset.value.y) / cell).toInt()
             return if (x in 0..63 && y in 0..63) IntOffset(x, y) else null
+        }
+
+        fun clampSkin(p: Offset): IntOffset {
+            val cell = size.width * scale.floatValue / 64f
+            val x = floor((p.x - offset.value.x) / cell).toInt().coerceIn(0, 63)
+            val y = floor((p.y - offset.value.y) / cell).toInt().coerceIn(0, 63)
+            return IntOffset(x, y)
         }
 
         fun stroke(p: Offset) {
@@ -479,6 +541,23 @@ private suspend fun PointerInputScope.editorGestures(
         val pen = state.tool == Tool.PENCIL || state.tool == Tool.ERASER || shading
         val moving = state.tool == Tool.MOVE
         val lineStart = if (state.tool == Tool.LINE) toSkin(down.position) else null
+
+        val selecting = state.tool == Tool.SELECT
+        val moveArmed = selecting && state.selectMoveArmed
+        val moveStart = state.selection
+        val moveOriginal = if (moveArmed && moveStart != null) state.copyPixels() else null
+        val marqueeOrigin = if (selecting && !moveArmed) clampSkin(down.position) else null
+        var moveDelta = IntOffset.Zero
+
+        fun screenDelta(p: Offset): IntOffset {
+            val cell = size.width * scale.floatValue / 64f
+            val start = down.position
+            return IntOffset(((p.x - start.x) / cell).roundToInt(), ((p.y - start.y) / cell).roundToInt())
+        }
+
+        if (marqueeOrigin != null) {
+            marquee.value = SelRect(marqueeOrigin.x, marqueeOrigin.y, marqueeOrigin.x, marqueeOrigin.y)
+        }
 
         fun previewLine(p: Offset) {
             val start = lineStart ?: return
@@ -520,7 +599,16 @@ private suspend fun PointerInputScope.editorGestures(
                 scale.floatValue = ns
                 offset.value = no
             } else if (!multi && pressed == 1) {
-                if (moving) {
+                if (moveArmed && moveStart != null && moveOriginal != null) {
+                    moveDelta = screenDelta(event.changes.first { it.pressed }.position)
+                    state.previewMove(moveOriginal, moveStart, moveDelta.x, moveDelta.y)
+                } else if (marqueeOrigin != null) {
+                    val cur = clampSkin(event.changes.first { it.pressed }.position)
+                    marquee.value = SelRect(
+                        minOf(marqueeOrigin.x, cur.x), minOf(marqueeOrigin.y, cur.y),
+                        maxOf(marqueeOrigin.x, cur.x), maxOf(marqueeOrigin.y, cur.y)
+                    )
+                } else if (moving) {
                     val pan = event.calculatePan()
                     val full = size.width * scale.floatValue
                     val no = offset.value + pan
@@ -537,13 +625,23 @@ private suspend fun PointerInputScope.editorGestures(
         } while (event.changes.any { it.pressed })
 
         if (!multi) {
-            when (state.tool) {
-                Tool.FILL -> toSkin(down.position)?.let {
+            when {
+                moveArmed && moveStart != null && moveOriginal != null -> {
+                    state.disarmMove()
+                    if (moveDelta != IntOffset.Zero) state.commit(moveOriginal) else state.restore(moveOriginal)
+                }
+                marqueeOrigin != null -> {
+                    state.setSelection(marquee.value)
+                    marquee.value = null
+                }
+                state.tool == Tool.FILL -> toSkin(down.position)?.let {
                     if (state.fill(it.y * 64 + it.x, state.color)) changed = true
                 }
-                Tool.EYEDROPPER -> toSkin(down.position)?.let { state.pick(it.y * 64 + it.x) }
+                state.tool == Tool.EYEDROPPER -> toSkin(down.position)?.let { state.pick(it.y * 64 + it.x) }
                 else -> {}
             }
+        } else {
+            marquee.value = null
         }
         if (changed) {
             state.touched()
