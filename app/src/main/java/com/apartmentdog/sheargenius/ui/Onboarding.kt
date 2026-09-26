@@ -23,7 +23,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.apartmentdog.sheargenius.AppState
 
 private data class Step(val icon: PixelIcon, val title: String, val body: String)
@@ -57,7 +56,7 @@ fun OnboardingDialog(state: AppState) {
     val last = step == STEPS.lastIndex
     val s = STEPS[step]
 
-    Dialog(onDismissRequest = { state.dismissOnboarding() }, properties = DialogProperties(dismissOnRequest = true)) {
+    Dialog(onDismissRequest = { state.dismissOnboarding() }) {
         Panel(Modifier.width(320.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 PixelText("What's where", 16.sp)
