@@ -109,6 +109,7 @@ fun FilesScreen(state: AppState) {
                 }, icon = PixelIcons.Plus, label = "New")
                 BlockButton(onClick = { opener.launch(arrayOf("image/png")) }, icon = PixelIcons.Photo, label = "Import")
                 BlockButton(onClick = { showPlayer = true }, label = "Player")
+                BlockButton(onClick = { state.startOnboarding() }, label = "Tour")
             }
             Spacer(Modifier.height(12.dp))
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

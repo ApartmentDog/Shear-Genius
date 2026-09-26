@@ -75,6 +75,8 @@ class AppState(private val context: Context) {
     var color by mutableIntStateOf(0xFFD85A30.toInt())
     val palette = mutableStateListOf<Int>()
     var screen by mutableStateOf(Screen.EDITOR)
+    var showOnboarding by mutableStateOf(false)
+        private set
 
     var projectId by mutableStateOf("")
         private set
@@ -117,6 +119,7 @@ class AppState(private val context: Context) {
         projectsDir.mkdirs()
         color = prefs.getInt("color", color)
         miniPreview = prefs.getBoolean("miniPreview", false)
+        showOnboarding = !prefs.getBoolean("onboardingSeen", false)
         previewBg = prefs.getInt("previewBg", 0)
         showLabels = prefs.getBoolean("labels", true)
         shadeAmount = prefs.getFloat("shadeAmount", 0.5f)
@@ -957,6 +960,15 @@ class AppState(private val context: Context) {
             walk = false
             walkPhase = 0f
         }
+    }
+
+    fun dismissOnboarding() {
+        showOnboarding = false
+        prefs.edit().putBoolean("onboardingSeen", true).apply()
+    }
+
+    fun startOnboarding() {
+        showOnboarding = true
     }
 
     fun resetPreview() {

@@ -45,6 +45,7 @@ fun ShearGeniusApp(state: AppState) {
                 }
                 Hotbar(state)
             }
+            if (state.showOnboarding) OnboardingDialog(state)
         }
     }
 }
