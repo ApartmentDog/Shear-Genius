@@ -19,7 +19,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import android.widget.Toast
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,7 +43,8 @@ val PREVIEW_BACKGROUNDS = listOf(
     "Sky" to 0xFF9DB9D8.toInt(),
     "Stone" to 0xFFB4B2A9.toInt(),
     "Grass" to 0xFF8FB86A.toInt(),
-    "Dark" to 0xFF2C2C2A.toInt()
+    "Dark" to 0xFF2C2C2A.toInt(),
+    "Clear" to 0x00000000
 )
 
 private val PARTS = listOf("Head", "Body", "R arm", "L arm", "R leg", "L leg")
@@ -116,9 +123,9 @@ fun PreviewScreen(state: AppState) {
         Panel(Modifier.fillMaxWidth()) {
             PixelText("Background", 14.sp)
             Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 PREVIEW_BACKGROUNDS.forEachIndexed { i, (_, argb) ->
-                    Slot(size = 44.dp, selected = i == bgIndex, onClick = { state.changePreviewBg(i) }) {
+                    Slot(size = 40.dp, selected = i == bgIndex, onClick = { state.changePreviewBg(i) }) {
                         Box(Modifier.size(26.dp).background(Color(argb)))
                     }
                 }
@@ -126,6 +133,37 @@ fun PreviewScreen(state: AppState) {
                 PixelText(PREVIEW_BACKGROUNDS[bgIndex].first, 14.sp)
             }
         }
+
+        RenderPanel(state, PREVIEW_BACKGROUNDS[bgIndex].second)
+    }
+}
+
+@Composable
+private fun RenderPanel(state: AppState, background: Int) {
+    val context = LocalContext.current
+    var shareAfter by remember { mutableStateOf(false) }
+    fun deliver(bitmap: android.graphics.Bitmap, suffix: String) {
+        val uri = RenderExport.save(context, bitmap, "${state.projectName} $suffix")
+        if (uri == null) {
+            Toast.makeText(context, "Couldn't save the image", Toast.LENGTH_SHORT).show()
+        } else if (shareAfter) {
+            RenderExport.share(context, uri)
+        } else {
+            Toast.makeText(context, "Saved to Pictures/Shear Genius", Toast.LENGTH_SHORT).show()
+        }
+    }
+    val bg = if ((background ushr 24) == 0) null else background
+    Panel(Modifier.fillMaxWidth()) {
+        PixelText("Render", 14.sp)
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BlockButton(onClick = { deliver(RenderExport.view(state, bg), "view") }, label = "Save view")
+            BlockButton(onClick = { deliver(RenderExport.turnaround(state, bg), "turnaround") }, label = "Save turnaround")
+        }
+        Spacer(Modifier.height(8.dp))
+        BlockButton(onClick = { shareAfter = !shareAfter }, label = "Share after saving", selected = shareAfter)
+        Spacer(Modifier.height(6.dp))
+        PixelText("Uses the current angle, zoom, parts and background. Pick Clear for a transparent PNG.", 11.sp)
     }
 }
 

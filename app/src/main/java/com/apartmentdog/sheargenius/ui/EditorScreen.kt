@@ -75,6 +75,7 @@ import kotlin.math.roundToInt
 fun EditorScreen(state: AppState) {
     var pendingSlim by remember { mutableStateOf<Boolean?>(null) }
     var showColor by remember { mutableStateOf(false) }
+    var showLayers by remember { mutableStateOf(false) }
     val scale = remember { mutableFloatStateOf(1f) }
     val offset = remember { mutableStateOf(Offset.Zero) }
     val canvasPx = remember { mutableIntStateOf(0) }
@@ -179,6 +180,14 @@ fun EditorScreen(state: AppState) {
             }
         }
 
+        val activeName = state.layers.getOrNull(state.activeLayer)?.let { if (it.visible) it.name else it.name + " (hidden)" } ?: ""
+        BlockButton(
+            onClick = { showLayers = true },
+            icon = PixelIcons.Layers,
+            label = "Layer: $activeName",
+            modifier = Modifier.fillMaxWidth()
+        )
+
         if (state.tool == Tool.SHADE) {
             Panel(Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -269,6 +278,8 @@ fun EditorScreen(state: AppState) {
         )
     }
 
+    if (showLayers) LayersDialog(state, onDismiss = { showLayers = false })
+
     if (showColor) {
         ColorDialog(
             initial = state.color,
@@ -353,7 +364,7 @@ private fun SkinCanvas(
         val showOverlay = state.overlayVisible
         val map = state.regionMap
         val boxes = state.boxes
-        val px = state.pixels
+        val px = state.composite()
         for (i in 0 until SkinLayout.COUNT) {
             val b = map[i]
             buffer[i] = if (b < 0) {

@@ -10,6 +10,7 @@ import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import com.apartmentdog.sheargenius.AppState
@@ -199,9 +200,28 @@ fun SkinModelView(
     androidx.compose.foundation.Canvas(modifier) {
         @Suppress("UNUSED_VARIABLE")
         val v = state.version
-        bitmap.setPixels(state.pixels, 0, 64, 0, 0, 64, 64)
+        bitmap.setPixels(state.composite(), 0, 64, 0, 0, 64, 64)
         val slim = state.slim
-        drawRect(androidx.compose.ui.graphics.Color(background))
+        if ((background ushr 24) == 0) {
+            val sq = 12.dp.toPx()
+            var yy = 0
+            var row = 0
+            while (yy * sq < size.height) {
+                var xx = 0
+                while (xx * sq < size.width) {
+                    drawRect(
+                        if ((xx + row) % 2 == 0) androidx.compose.ui.graphics.Color(0xFFD3D1C7) else androidx.compose.ui.graphics.Color(0xFFF1EFE8),
+                        androidx.compose.ui.geometry.Offset(xx * sq, yy * sq),
+                        androidx.compose.ui.geometry.Size(sq, sq)
+                    )
+                    xx++
+                }
+                yy++
+                row++
+            }
+        } else {
+            drawRect(androidx.compose.ui.graphics.Color(background))
+        }
         drawIntoCanvas {
             SkinRenderer.draw(it.nativeCanvas, paint, slim, showOverlay, hidden, rx, ry, zoom, size.width, size.height)
         }

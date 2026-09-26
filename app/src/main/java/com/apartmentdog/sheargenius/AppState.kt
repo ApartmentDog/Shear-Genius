@@ -30,7 +30,12 @@ data class ProjectInfo(val id: String, val name: String, val updated: Long)
 
 class RefImage(val file: File, val bitmap: Bitmap)
 
-private class UndoStep(val pixels: IntArray, val slim: Boolean)
+/** One paint layer. Index 0 in [AppState.layers] is the bottom of the stack. */
+data class Layer(val id: Long, val name: String, val visible: Boolean, val pixels: IntArray)
+
+private class UndoStep(val layers: List<Layer>, val active: Int, val slim: Boolean)
+
+const val MAX_LAYERS = 12
 
 private val DEFAULT_PALETTE = listOf(
     0xFF4A1B0C.toInt(), 0xFF712B13.toInt(), 0xFF993C1D.toInt(), 0xFFD85A30.toInt(),
@@ -38,8 +43,12 @@ private val DEFAULT_PALETTE = listOf(
 )
 
 class AppState(private val context: Context) {
-    var pixels: IntArray = IntArray(SkinLayout.COUNT)
+    val layers = mutableStateListOf(Layer(1L, "Base", true, IntArray(SkinLayout.COUNT)))
+    var activeLayer by mutableIntStateOf(0)
         private set
+
+    /** Pixels of the layer being painted. Tools edit this array in place. */
+    val pixels: IntArray get() = layers[activeLayer.coerceIn(0, layers.lastIndex)].pixels
     var version by mutableIntStateOf(0)
         private set
     var slim by mutableStateOf(false)
@@ -245,7 +254,7 @@ class AppState(private val context: Context) {
     }
 
     fun pick(i: Int) {
-        val p = pixels[i]
+        val p = composite()[i]
         if ((p ushr 24) != 0) {
             color = p or (0xFF shl 24)
             tool = Tool.PENCIL
@@ -260,12 +269,155 @@ class AppState(private val context: Context) {
     fun copyPixels(): IntArray = pixels.copyOf()
 
     fun restore(p: IntArray) {
-        pixels = p.copyOf()
+        System.arraycopy(p, 0, pixels, 0, SkinLayout.COUNT)
         version++
     }
 
     fun commit(before: IntArray) {
-        push(UndoStep(before, slim))
+        val snap = snapshot()
+        val layersBefore = snap.layers.toMutableList()
+        val i = snap.active
+        layersBefore[i] = layersBefore[i].copy(pixels = before)
+        push(UndoStep(layersBefore, i, slim))
+        save()
+    }
+
+    private fun snapshot(): UndoStep =
+        UndoStep(layers.map { it.copy(pixels = it.pixels.copyOf()) }, activeLayer, slim)
+
+    private fun applyStep(step: UndoStep) {
+        layers.clear()
+        layers.addAll(step.layers)
+        activeLayer = step.active.coerceIn(0, layers.lastIndex)
+        slim = step.slim
+        version++
+    }
+
+    /** Visible layers flattened bottom to top with normal alpha blending. */
+    fun composite(): IntArray {
+        val out = IntArray(SkinLayout.COUNT)
+        for (layer in layers) {
+            if (!layer.visible) continue
+            val src = layer.pixels
+            for (i in 0 until SkinLayout.COUNT) {
+                val s = src[i]
+                val sa = s ushr 24
+                if (sa == 0) continue
+                if (sa == 255) {
+                    out[i] = s
+                    continue
+                }
+                val d = out[i]
+                val da = d ushr 24
+                val outA = sa + da * (255 - sa) / 255
+                if (outA == 0) continue
+                fun ch(shift: Int): Int {
+                    val sc = (s shr shift) and 0xFF
+                    val dc = (d shr shift) and 0xFF
+                    return ((sc * sa + dc * da * (255 - sa) / 255) / outA).coerceIn(0, 255)
+                }
+                out[i] = (outA shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
+            }
+        }
+        return out
+    }
+
+    // ---- layers
+
+    private fun newLayerId(): Long = (layers.maxOfOrNull { it.id } ?: 0L) + 1L
+
+    fun selectLayer(i: Int) {
+        if (i in layers.indices) {
+            activeLayer = i
+            version++
+        }
+    }
+
+    fun addLayer() {
+        if (layers.size >= MAX_LAYERS) return
+        push(snapshot())
+        val id = newLayerId()
+        layers.add(activeLayer + 1, Layer(id, "Layer $id", true, IntArray(SkinLayout.COUNT)))
+        activeLayer += 1
+        version++
+        save()
+    }
+
+    fun duplicateLayer() {
+        if (layers.size >= MAX_LAYERS) return
+        push(snapshot())
+        val src = layers[activeLayer]
+        layers.add(activeLayer + 1, Layer(newLayerId(), src.name + " copy", src.visible, src.pixels.copyOf()))
+        activeLayer += 1
+        version++
+        save()
+    }
+
+    fun deleteLayer() {
+        if (layers.size <= 1) return
+        push(snapshot())
+        layers.removeAt(activeLayer)
+        activeLayer = activeLayer.coerceAtMost(layers.lastIndex)
+        version++
+        save()
+    }
+
+    /** Moves the active layer up (toward the top of the stack) when [up] is true. */
+    fun moveLayer(up: Boolean) {
+        val to = if (up) activeLayer + 1 else activeLayer - 1
+        if (to !in layers.indices) return
+        push(snapshot())
+        val l = layers.removeAt(activeLayer)
+        layers.add(to, l)
+        activeLayer = to
+        version++
+        save()
+    }
+
+    /** Merges the active layer into the one below it. */
+    fun mergeDown() {
+        if (activeLayer == 0) return
+        push(snapshot())
+        val top = layers[activeLayer]
+        val below = layers[activeLayer - 1]
+        val merged = below.pixels.copyOf()
+        if (top.visible) {
+            for (i in 0 until SkinLayout.COUNT) {
+                val s = top.pixels[i]
+                val sa = s ushr 24
+                if (sa == 0) continue
+                if (sa == 255 || (merged[i] ushr 24) == 0) merged[i] = s
+                else {
+                    val d = merged[i]
+                    val da = d ushr 24
+                    val outA = sa + da * (255 - sa) / 255
+                    fun ch(shift: Int): Int {
+                        val sc = (s shr shift) and 0xFF
+                        val dc = (d shr shift) and 0xFF
+                        return ((sc * sa + dc * da * (255 - sa) / 255) / outA).coerceIn(0, 255)
+                    }
+                    merged[i] = (outA shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
+                }
+            }
+        }
+        layers[activeLayer - 1] = below.copy(pixels = merged)
+        layers.removeAt(activeLayer)
+        activeLayer -= 1
+        version++
+        save()
+    }
+
+    fun renameLayer(i: Int, name: String) {
+        val clean = name.trim().ifEmpty { return }
+        if (i !in layers.indices) return
+        layers[i] = layers[i].copy(name = clean.take(24))
+        save()
+    }
+
+    fun toggleLayerVisible(i: Int) {
+        if (i !in layers.indices) return
+        layers[i] = layers[i].copy(visible = !layers[i].visible)
+        version++
         save()
     }
 
@@ -280,20 +432,16 @@ class AppState(private val context: Context) {
 
     fun undo() {
         val step = undoStack.removeLastOrNull() ?: return
-        redoStack.addLast(UndoStep(pixels.copyOf(), slim))
-        pixels = step.pixels
-        slim = step.slim
-        version++
+        redoStack.addLast(snapshot())
+        applyStep(step)
         updateFlags()
         save()
     }
 
     fun redo() {
         val step = redoStack.removeLastOrNull() ?: return
-        undoStack.addLast(UndoStep(pixels.copyOf(), slim))
-        pixels = step.pixels
-        slim = step.slim
-        version++
+        undoStack.addLast(snapshot())
+        applyStep(step)
         updateFlags()
         save()
     }
@@ -305,12 +453,14 @@ class AppState(private val context: Context) {
 
     // ---- model
 
-    fun armsHaveContent(): Boolean = SkinLayout.armsHaveContent(pixels, slim)
+    fun armsHaveContent(): Boolean = layers.any { SkinLayout.armsHaveContent(it.pixels, slim) }
 
     fun changeModel(target: Boolean) {
         if (target == slim) return
-        push(UndoStep(pixels.copyOf(), slim))
-        pixels = SkinLayout.convertArms(pixels, slim, target)
+        push(snapshot())
+        for (i in layers.indices) {
+            layers[i] = layers[i].copy(pixels = SkinLayout.convertArms(layers[i].pixels, slim, target))
+        }
         slim = target
         version++
         save()
@@ -342,6 +492,17 @@ class AppState(private val context: Context) {
 
     private fun dirOf(id: String) = File(projectsDir, id)
     private fun refsDirOf(id: String) = File(dirOf(id), "refs")
+    private fun layersDirOf(id: String) = File(dirOf(id), "layers")
+
+    private fun readSkinFile(f: File): IntArray {
+        val out = IntArray(SkinLayout.COUNT)
+        if (f.exists()) {
+            val opts = BitmapFactory.Options().apply { inPremultiplied = false }
+            val b = BitmapFactory.decodeFile(f.path, opts)
+            if (b != null && b.width == 64 && b.height == 64) b.getPixels(out, 0, 64, 0, 0, 64, 64)
+        }
+        return out
+    }
 
     fun refreshProjects() {
         val list = projectsDir.listFiles()?.filter { it.isDirectory }?.mapNotNull { dir ->
@@ -380,7 +541,9 @@ class AppState(private val context: Context) {
         dirOf(id).mkdirs()
         projectId = id
         projectName = nextName(name ?: "Skin")
-        pixels = startPixels.copyOf()
+        layers.clear()
+        layers.add(Layer(1L, "Base", true, startPixels.copyOf()))
+        activeLayer = 0
         slim = startSlim
         palette.clear()
         palette.addAll(startPalette)
@@ -406,14 +569,23 @@ class AppState(private val context: Context) {
         } else {
             palette.addAll(DEFAULT_PALETTE)
         }
-        val loaded = IntArray(SkinLayout.COUNT)
-        val f = File(dirOf(id), "skin.png")
-        if (f.exists()) {
-            val opts = BitmapFactory.Options().apply { inPremultiplied = false }
-            val b = BitmapFactory.decodeFile(f.path, opts)
-            if (b != null && b.width == 64 && b.height == 64) b.getPixels(loaded, 0, 64, 0, 0, 64, 64)
+        val loadedLayers = mutableListOf<Layer>()
+        val layerMeta = meta.optJSONArray("layers")
+        if (layerMeta != null && layerMeta.length() > 0) {
+            for (i in 0 until layerMeta.length()) {
+                val o = layerMeta.getJSONObject(i)
+                val lid = o.optLong("id", (i + 1).toLong())
+                loadedLayers.add(
+                    Layer(lid, o.optString("name", "Layer $lid"), o.optBoolean("visible", true),
+                        readSkinFile(File(layersDirOf(id), "$lid.png")))
+                )
+            }
+        } else {
+            loadedLayers.add(Layer(1L, "Base", true, readSkinFile(File(dirOf(id), "skin.png"))))
         }
-        pixels = loaded
+        layers.clear()
+        layers.addAll(loadedLayers)
+        activeLayer = meta.optInt("active", layers.lastIndex).coerceIn(0, layers.lastIndex)
         references.clear()
         refsDirOf(id).listFiles()?.sortedBy { it.name }?.forEach { rf ->
             val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
@@ -585,10 +757,10 @@ class AppState(private val context: Context) {
         }
     }
 
-    private fun writePng(out: OutputStream) {
+    private fun writePng(out: OutputStream, px: IntArray = composite()) {
         val b = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
         b.isPremultiplied = false
-        b.setPixels(pixels, 0, 64, 0, 0, 64, 64)
+        b.setPixels(px, 0, 64, 0, 0, 64, 64)
         b.compress(Bitmap.CompressFormat.PNG, 100, out)
     }
 
@@ -597,6 +769,11 @@ class AppState(private val context: Context) {
         try {
             dirOf(projectId).mkdirs()
             File(dirOf(projectId), "skin.png").outputStream().use { writePng(it) }
+            val ld = layersDirOf(projectId)
+            ld.mkdirs()
+            val keep = layers.map { "${it.id}.png" }.toSet()
+            for (l in layers) File(ld, "${l.id}.png").outputStream().use { writePng(it, l.pixels) }
+            ld.listFiles()?.forEach { if (it.name !in keep) it.delete() }
         } catch (e: Exception) {
         }
         saveMeta()
@@ -610,6 +787,12 @@ class AppState(private val context: Context) {
             .put("slim", slim)
             .put("updated", now)
             .put("palette", JSONArray(palette.toList()))
+            .put("active", activeLayer)
+            .put("layers", JSONArray().also { arr ->
+                layers.forEach { l ->
+                    arr.put(JSONObject().put("id", l.id).put("name", l.name).put("visible", l.visible))
+                }
+            })
         try {
             File(dirOf(projectId), "meta.json").writeText(meta.toString())
         } catch (e: Exception) {
