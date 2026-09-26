@@ -218,6 +218,164 @@ object SkinRenderer {
         paint.colorFilter = null
     }
 
+    /**
+     * Finds which skin pixel is under a screen tap, by projecting each visible face's
+     * quad the same way [draw] does and solving for where the tap lands inside it.
+     * Returns the nearest matching face by depth, or null if the tap misses the model.
+     */
+    fun hitTest(
+        slim: Boolean,
+        showOverlay: Boolean,
+        hidden: Set<Int>,
+        rx: Float,
+        ry: Float,
+        zoom: Float,
+        swing: Float,
+        width: Float,
+        height: Float,
+        tapX: Float,
+        tapY: Float
+    ): Int? {
+        val boxes = SkinLayout.boxes(slim)
+        val cY = cos(ry)
+        val sY = sin(ry)
+        val cX = cos(rx)
+        val sX = sin(rx)
+        val unit = min(width, height) / 40f * zoom
+        val ox = width / 2f
+        val oy = height / 2f
+        val out = FloatArray(3)
+
+        fun rot(x: Float, y: Float, z: Float) {
+            val x1 = x * cY + z * sY
+            val z1 = -x * sY + z * cY
+            out[0] = x1
+            out[1] = y * cX - z1 * sX
+            out[2] = y * sX + z1 * cX
+        }
+
+        fun limbAngle(p: Int): Float = when (p) {
+            2 -> swing
+            3 -> -swing
+            4 -> -swing
+            5 -> swing
+            else -> 0f
+        }
+        fun pivotY(p: Int): Float = if (p == 2 || p == 3) 8f else -4f
+
+        var bestDepth = Float.NEGATIVE_INFINITY
+        var bestPixel: Int? = null
+        val raw = FloatArray(12)
+        val sx = FloatArray(4)
+        val sy = FloatArray(4)
+        val sz = FloatArray(4)
+
+        fun poseYZ(y: Float, z: Float, poseC: Float, poseS: Float, pivotY: Float): FloatArray {
+            val yy = y - pivotY
+            return floatArrayOf(pivotY + yy * poseC - z * poseS, yy * poseS + z * poseC)
+        }
+
+        fun considerBox(box: SkinBox, c: FloatArray, poseAngle: Float, pivotY: Float) {
+            val poseC = cos(poseAngle)
+            val poseS = sin(poseAngle)
+            val hw = box.w / 2f
+            val hh = box.h / 2f
+            val hd = box.d / 2f
+            val x0 = c[0] - hw; val x1 = c[0] + hw
+            val y0 = c[1] - hh; val y1 = c[1] + hh
+            val z0 = c[2] - hd; val z1 = c[2] + hd
+            val u = box.u; val v = box.v; val w = box.w; val h = box.h; val d = box.d
+            for (f in Face.values()) {
+                var nx = 0f; var ny = 0f; var nz = 0f
+                val tx: Int; val ty: Int; val tw: Int; val th: Int
+                when (f) {
+                    Face.FRONT -> {
+                        nz = 1f
+                        raw[0]=x0; raw[1]=y1; raw[2]=z1; raw[3]=x1; raw[4]=y1; raw[5]=z1
+                        raw[6]=x0; raw[7]=y0; raw[8]=z1; raw[9]=x1; raw[10]=y0; raw[11]=z1
+                        tx = u + d; ty = v + d; tw = w; th = h
+                    }
+                    Face.BACK -> {
+                        nz = -1f
+                        raw[0]=x1; raw[1]=y1; raw[2]=z0; raw[3]=x0; raw[4]=y1; raw[5]=z0
+                        raw[6]=x1; raw[7]=y0; raw[8]=z0; raw[9]=x0; raw[10]=y0; raw[11]=z0
+                        tx = u + 2 * d + w; ty = v + d; tw = w; th = h
+                    }
+                    Face.RIGHT -> {
+                        nx = -1f
+                        raw[0]=x0; raw[1]=y1; raw[2]=z0; raw[3]=x0; raw[4]=y1; raw[5]=z1
+                        raw[6]=x0; raw[7]=y0; raw[8]=z0; raw[9]=x0; raw[10]=y0; raw[11]=z1
+                        tx = u; ty = v + d; tw = d; th = h
+                    }
+                    Face.LEFT -> {
+                        nx = 1f
+                        raw[0]=x1; raw[1]=y1; raw[2]=z1; raw[3]=x1; raw[4]=y1; raw[5]=z0
+                        raw[6]=x1; raw[7]=y0; raw[8]=z1; raw[9]=x1; raw[10]=y0; raw[11]=z0
+                        tx = u + d + w; ty = v + d; tw = d; th = h
+                    }
+                    Face.TOP -> {
+                        ny = 1f
+                        raw[0]=x0; raw[1]=y1; raw[2]=z0; raw[3]=x1; raw[4]=y1; raw[5]=z0
+                        raw[6]=x0; raw[7]=y1; raw[8]=z1; raw[9]=x1; raw[10]=y1; raw[11]=z1
+                        tx = u + d; ty = v; tw = w; th = d
+                    }
+                    Face.BOTTOM -> {
+                        ny = -1f
+                        raw[0]=x0; raw[1]=y0; raw[2]=z1; raw[3]=x1; raw[4]=y0; raw[5]=z1
+                        raw[6]=x0; raw[7]=y0; raw[8]=z0; raw[9]=x1; raw[10]=y0; raw[11]=z0
+                        tx = u + d + w; ty = v; tw = w; th = d
+                    }
+                }
+                var pny = ny
+                var pnz = nz
+                if (poseAngle != 0f) {
+                    val pr = poseYZ(ny, nz, poseC, poseS, 0f)
+                    pny = pr[0]; pnz = pr[1]
+                }
+                rot(nx, pny, pnz)
+                if (out[2] <= 0.01f) continue
+                for (k in 0 until 4) {
+                    val cx = raw[k * 3]
+                    var cy = raw[k * 3 + 1]
+                    var cz = raw[k * 3 + 2]
+                    if (poseAngle != 0f) {
+                        val pr = poseYZ(cy, cz, poseC, poseS, pivotY)
+                        cy = pr[0]; cz = pr[1]
+                    }
+                    rot(cx, cy, cz)
+                    sx[k] = ox + out[0] * unit
+                    sy[k] = oy - out[1] * unit
+                    sz[k] = out[2]
+                }
+                val ax = sx[1] - sx[0]; val ay = sy[1] - sy[0]
+                val bx = sx[2] - sx[0]; val by = sy[2] - sy[0]
+                val det = ax * by - bx * ay
+                if (kotlin.math.abs(det) < 1e-4f) continue
+                val ppx = tapX - sx[0]; val ppy = tapY - sy[0]
+                val uu = (by * ppx - bx * ppy) / det
+                val vv = (ax * ppy - ay * ppx) / det
+                if (uu < 0f || uu > 1f || vv < 0f || vv > 1f) continue
+                val depth = (sz[0] + sz[1] + sz[2] + sz[3]) / 4f
+                if (depth > bestDepth) {
+                    val col = (uu * tw).toInt().coerceIn(0, tw - 1)
+                    val row = (vv * th).toInt().coerceIn(0, th - 1)
+                    bestDepth = depth
+                    bestPixel = (ty + row) * SkinLayout.SIZE + (tx + col)
+                }
+            }
+        }
+
+        for (p in 0 until 6) {
+            if (p in hidden) continue
+            val base = boxes[p * 2]
+            val over = boxes[p * 2 + 1]
+            val c = centerOf(base.id, slim)
+            considerBox(base, c, limbAngle(p), pivotY(p))
+            if (showOverlay) considerBox(over, c, limbAngle(p), pivotY(p))
+        }
+        return bestPixel
+    }
+
     private fun set(vararg p: Float) {
         for (i in 0 until 12) corners[i] = p[i]
     }

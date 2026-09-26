@@ -77,6 +77,7 @@ class AppState(private val context: Context) {
     var previewZoom by mutableFloatStateOf(1f)
     var previewOverlay by mutableStateOf(true)
     var spin by mutableStateOf(false)
+    var paintOnModel by mutableStateOf(false)
     var walk by mutableStateOf(false)
     var walkPhase by mutableFloatStateOf(0f)
     val previewSwing: Float get() = if (walk) kotlin.math.sin(walkPhase) * 0.6f else 0f
@@ -803,6 +804,15 @@ class AppState(private val context: Context) {
         val idx = projects.indexOfFirst { it.id == projectId }
         if (idx >= 0) projects[idx] = projects[idx].copy(name = projectName, updated = now)
         savePrefs()
+    }
+
+    fun togglePaintOnModel() {
+        paintOnModel = !paintOnModel
+        if (paintOnModel) {
+            spin = false
+            walk = false
+            walkPhase = 0f
+        }
     }
 
     fun resetPreview() {
