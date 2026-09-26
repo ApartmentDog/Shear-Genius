@@ -344,7 +344,7 @@ class AppState(private val context: Context) {
 
     // ---- selection
 
-    fun setSelection(r: SelRect?) {
+    fun updateSelection(r: SelRect?) {
         selection = r?.clamped()
         selectMoveArmed = false
     }

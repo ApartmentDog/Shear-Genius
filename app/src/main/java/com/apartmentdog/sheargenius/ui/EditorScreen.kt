@@ -631,7 +631,7 @@ private suspend fun PointerInputScope.editorGestures(
                     if (moveDelta != IntOffset.Zero) state.commit(moveOriginal) else state.restore(moveOriginal)
                 }
                 marqueeOrigin != null -> {
-                    state.setSelection(marquee.value)
+                    state.updateSelection(marquee.value)
                     marquee.value = null
                 }
                 state.tool == Tool.FILL -> toSkin(down.position)?.let {
