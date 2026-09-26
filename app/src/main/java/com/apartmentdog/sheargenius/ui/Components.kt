@@ -30,7 +30,7 @@ fun Panel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> 
     Column(
         modifier = modifier
             .bevel(Blocky.Panel, Blocky.PanelLight, Blocky.PanelDark, 3.dp)
-            .padding(12.dp),
+            .padding(9.dp),
         content = content
     )
 }

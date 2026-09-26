@@ -71,7 +71,7 @@ fun PreviewScreen(state: AppState) {
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(11.dp)
     ) {
         Panel(Modifier.fillMaxWidth()) {
             SkinModelView(
