@@ -482,6 +482,26 @@ class AppState(private val context: Context) {
 
     // ---- files
 
+    /** Imports a downloaded skin (PNG bytes) as a new project. */
+    fun importSkinBytes(bytes: ByteArray, name: String, slimHint: Boolean): String? {
+        val opts = BitmapFactory.Options().apply {
+            inPremultiplied = false
+            inScaled = false
+        }
+        val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts) ?: return "That skin file couldn't be read."
+        val px = when {
+            bmp.width == 64 && bmp.height == 64 -> IntArray(SkinLayout.COUNT).also { bmp.getPixels(it, 0, 64, 0, 0, 64, 64) }
+            bmp.width == 64 && bmp.height == 32 -> {
+                val a = IntArray(64 * 32)
+                bmp.getPixels(a, 0, 64, 0, 0, 64, 32)
+                SkinLayout.upgradeLegacy(a)
+            }
+            else -> return "That skin is ${bmp.width}×${bmp.height}, which isn't a standard Java skin size."
+        }
+        createProject(name = name, startPixels = px, startSlim = slimHint && bmp.height == 64, startPalette = palette.toList())
+        return null
+    }
+
     /** Imports a skin PNG as a new project named after the file. */
     fun importSkin(uri: Uri): String? {
         return try {

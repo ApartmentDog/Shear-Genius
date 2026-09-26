@@ -185,6 +185,28 @@ fun Modifier.tiled(tile: ImageBitmap, tileSize: Dp): Modifier = this.drawBehind 
     }
 }
 
+/** Repeats a non-square pixel texture; [texel] is the on-screen size of one texture pixel. */
+fun Modifier.pixelTiled(tile: ImageBitmap, texel: Dp): Modifier = this.drawBehind {
+    val tw = (texel.toPx() * tile.width).toInt().coerceAtLeast(1)
+    val th = (texel.toPx() * tile.height).toInt().coerceAtLeast(1)
+    var y = 0
+    while (y < size.height) {
+        var x = 0
+        while (x < size.width) {
+            drawImage(
+                image = tile,
+                srcOffset = IntOffset.Zero,
+                srcSize = IntSize(tile.width, tile.height),
+                dstOffset = IntOffset(x, y),
+                dstSize = IntSize(tw, th),
+                filterQuality = FilterQuality.None
+            )
+            x += tw
+        }
+        y += th
+    }
+}
+
 /** Blocky bevel: light top-left edge, dark bottom-right edge, optional outline. */
 fun Modifier.bevel(fill: Color, light: Color, dark: Color, width: Dp, outline: Color? = Blocky.Outline): Modifier =
     this.drawBehind {

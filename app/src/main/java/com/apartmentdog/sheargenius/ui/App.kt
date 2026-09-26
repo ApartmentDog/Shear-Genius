@@ -20,6 +20,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.res.imageResource
+import com.apartmentdog.sheargenius.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.apartmentdog.sheargenius.AppState
@@ -48,18 +51,19 @@ fun ShearGeniusApp(state: AppState) {
 
 @Composable
 private fun Header(state: AppState) {
+    val texture = ImageBitmap.imageResource(R.drawable.header_tex)
     Row(
         Modifier
             .fillMaxWidth()
-            .tiled(Textures.wool, 48.dp)
+            .pixelTiled(texture, 4.dp)
             .statusBarsPadding()
             .height(60.dp)
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            PixelText("Shear Genius", 18.sp, Color.White, maxLines = 1, lineHeight = 21.sp, shadow = true)
-            PixelText(state.projectName, 12.sp, Color(0xFFFAECE7), maxLines = 1, lineHeight = 15.sp, shadow = true)
+            PixelText("Shear Genius", 18.sp, Color(0xFF2E1F14), maxLines = 1, lineHeight = 21.sp)
+            PixelText(state.projectName, 12.sp, Color(0xFF4A3526), maxLines = 1, lineHeight = 15.sp)
         }
         Spacer(Modifier.width(8.dp))
         if (state.screen == Screen.EDITOR) {

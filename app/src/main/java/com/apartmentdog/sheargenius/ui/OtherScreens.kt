@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,9 +44,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.apartmentdog.sheargenius.AppState
+import com.apartmentdog.sheargenius.MojangSkins
 import com.apartmentdog.sheargenius.ProjectInfo
 import com.apartmentdog.sheargenius.Screen
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun FilesScreen(state: AppState) {
@@ -53,6 +58,7 @@ fun FilesScreen(state: AppState) {
     var menuFor by remember { mutableStateOf<ProjectInfo?>(null) }
     var renameFor by remember { mutableStateOf<ProjectInfo?>(null) }
     var deleteFor by remember { mutableStateOf<ProjectInfo?>(null) }
+    var showPlayer by remember { mutableStateOf(false) }
 
     val saver = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png")) { uri ->
         if (uri != null) {
@@ -94,15 +100,15 @@ fun FilesScreen(state: AppState) {
         }
 
         Panel(Modifier.fillMaxWidth()) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                PixelText("Projects", 16.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BlockButton(onClick = {
-                        state.createProject()
-                        state.screen = Screen.EDITOR
-                    }, icon = PixelIcons.Plus, label = "New")
-                    BlockButton(onClick = { opener.launch(arrayOf("image/png")) }, icon = PixelIcons.Photo, label = "Import")
-                }
+            PixelText("Projects", 16.sp)
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                BlockButton(onClick = {
+                    state.createProject()
+                    state.screen = Screen.EDITOR
+                }, icon = PixelIcons.Plus, label = "New")
+                BlockButton(onClick = { opener.launch(arrayOf("image/png")) }, icon = PixelIcons.Photo, label = "Import")
+                BlockButton(onClick = { showPlayer = true }, label = "Player")
             }
             Spacer(Modifier.height(12.dp))
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -174,6 +180,13 @@ fun FilesScreen(state: AppState) {
         }
     }
 
+    if (showPlayer) {
+        PlayerSkinDialog(state, onDone = {
+            showPlayer = false
+            state.screen = Screen.EDITOR
+        }, onDismiss = { showPlayer = false })
+    }
+
     deleteFor?.let { p ->
         AlertDialog(
             onDismissRequest = { deleteFor = null },
@@ -231,6 +244,72 @@ private fun HeadThumb(file: File, stamp: Long) {
             val dst = IntSize(size.width.toInt(), size.height.toInt())
             drawImage(img, srcOffset = IntOffset(8, 8), srcSize = IntSize(8, 8), dstSize = dst, filterQuality = FilterQuality.None)
             drawImage(img, srcOffset = IntOffset(40, 8), srcSize = IntSize(8, 8), dstSize = dst, filterQuality = FilterQuality.None)
+        }
+    }
+}
+
+@Composable
+private fun PlayerSkinDialog(state: AppState, onDone: () -> Unit, onDismiss: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var name by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    fun download() {
+        if (busy || name.isBlank()) return
+        busy = true
+        error = null
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                try {
+                    Result.success(MojangSkins.fetch(name))
+                } catch (e: MojangSkins.LookupException) {
+                    Result.failure(e)
+                } catch (e: Exception) {
+                    Result.failure(Exception("Couldn't reach Minecraft's servers. Check your connection."))
+                }
+            }
+            busy = false
+            result.fold(
+                onSuccess = { skin ->
+                    val err = state.importSkinBytes(skin.bytes, skin.name, skin.slim)
+                    if (err == null) onDone() else error = err
+                },
+                onFailure = { error = it.message }
+            )
+        }
+    }
+
+    Dialog(onDismissRequest = { if (!busy) onDismiss() }) {
+        Panel(Modifier.width(300.dp)) {
+            PixelText("Download a player's skin", 16.sp)
+            Spacer(Modifier.height(4.dp))
+            PixelText("Java Edition username. It opens as a new project.", 12.sp)
+            Spacer(Modifier.height(10.dp))
+            BasicTextField(
+                value = name,
+                onValueChange = { t -> name = t.filter { it.isLetterOrDigit() || it == '_' }.take(16) },
+                singleLine = true,
+                enabled = !busy,
+                textStyle = TextStyle(fontFamily = LocalPixelFont.current, fontSize = 16.sp, color = Blocky.Text),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .bevel(Color.White, Blocky.ButtonDark, Color.White, 2.dp, null)
+                    .padding(10.dp)
+            )
+            val err = error
+            if (busy) {
+                Spacer(Modifier.height(8.dp))
+                PixelText("Looking up $name…", 12.sp)
+            } else if (err != null) {
+                Spacer(Modifier.height(8.dp))
+                PixelText(err, 12.sp, Color(0xFF993C1D))
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                BlockButton(onClick = onDismiss, label = "Cancel", enabled = !busy)
+                BlockButton(onClick = { download() }, label = "Download", selected = true, enabled = !busy && name.isNotBlank())
+            }
         }
     }
 }
