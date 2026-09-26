@@ -22,7 +22,7 @@ import kotlin.concurrent.thread
 
 enum class Tool { PENCIL, ERASER, LINE, FILL, EYEDROPPER, SHADE, MOVE }
 
-enum class ShadeMode { LIGHTEN, DARKEN, DITHER, NOISE }
+enum class ShadeMode { LIGHTEN, DARKEN, SHINE, NOISE, NOISY_PEN, DITHER }
 
 enum class Screen { EDITOR, REFERENCE, PREVIEW, FILES }
 
@@ -48,6 +48,7 @@ class AppState(private val context: Context) {
     var tool by mutableStateOf(Tool.PENCIL)
     var mirror by mutableStateOf(false)
     var shadeMode by mutableStateOf(ShadeMode.LIGHTEN)
+    var shadeAmount by mutableFloatStateOf(0.5f)
     var color by mutableIntStateOf(0xFFD85A30.toInt())
     val palette = mutableStateListOf<Int>()
     var screen by mutableStateOf(Screen.EDITOR)
@@ -91,6 +92,7 @@ class AppState(private val context: Context) {
         miniPreview = prefs.getBoolean("miniPreview", false)
         previewBg = prefs.getInt("previewBg", 0)
         showLabels = prefs.getBoolean("labels", true)
+        shadeAmount = prefs.getFloat("shadeAmount", 0.5f)
         migrateLegacy()
         refreshProjects()
         val last = prefs.getString("project", null)
@@ -143,6 +145,11 @@ class AppState(private val context: Context) {
                 }
                 return
             }
+            if (shadeMode == ShadeMode.NOISY_PEN) {
+                pixels[j] = noisy(color)
+                changed = true
+                return
+            }
             if ((p ushr 24) == 0) return
             val np = adjustShade(p)
             if (np != p) {
@@ -155,32 +162,53 @@ class AppState(private val context: Context) {
         return changed
     }
 
+    private fun towards(h: Float, target: Float, amount: Float): Float {
+        var diff = target - h
+        if (diff > 180f) diff -= 360f
+        if (diff < -180f) diff += 360f
+        val step = if (kotlin.math.abs(diff) < amount) diff else kotlin.math.sign(diff) * amount
+        return (h + step + 360f) % 360f
+    }
+
+    private fun rnd(): Float = (kotlin.random.Random.nextFloat() - 0.5f) * 2f
+
+    /** Current color with random variation in value, hue and saturation, scaled by the amount slider. */
+    private fun noisy(c: Int): Int {
+        val a = shadeAmount
+        val hsv = FloatArray(3)
+        android.graphics.Color.colorToHSV(c, hsv)
+        hsv[2] = (hsv[2] + rnd() * (0.02f + 0.23f * a)).coerceIn(0f, 1f)
+        hsv[1] = (hsv[1] + rnd() * 0.08f * a).coerceIn(0f, 1f)
+        hsv[0] = (hsv[0] + rnd() * 8f * a + 360f) % 360f
+        return android.graphics.Color.HSVToColor(0xFF, hsv)
+    }
+
     private fun adjustShade(p: Int): Int {
+        val a = shadeAmount
         val hsv = FloatArray(3)
         android.graphics.Color.colorToHSV(p, hsv)
-        fun towards(h: Float, target: Float, amount: Float): Float {
-            var diff = target - h
-            if (diff > 180f) diff -= 360f
-            if (diff < -180f) diff += 360f
-            val step = if (kotlin.math.abs(diff) < amount) diff else kotlin.math.sign(diff) * amount
-            return (h + step + 360f) % 360f
-        }
+        val step = 0.02f + 0.14f * a
         when (shadeMode) {
             ShadeMode.LIGHTEN -> {
-                hsv[2] = (hsv[2] + 0.08f).coerceAtMost(1f)
-                hsv[1] = (hsv[1] - 0.04f).coerceAtLeast(0f)
-                if (hsv[1] > 0.05f) hsv[0] = towards(hsv[0], 60f, 4f)
+                hsv[2] = (hsv[2] + step).coerceAtMost(1f)
+                hsv[1] = (hsv[1] - step / 2f).coerceAtLeast(0f)
+                if (hsv[1] > 0.05f) hsv[0] = towards(hsv[0], 60f, 2f + 8f * a)
             }
             ShadeMode.DARKEN -> {
-                hsv[2] = (hsv[2] - 0.08f).coerceAtLeast(0f)
-                hsv[1] = (hsv[1] + 0.04f).coerceAtMost(1f)
-                if (hsv[1] > 0.05f) hsv[0] = towards(hsv[0], 240f, 4f)
+                hsv[2] = (hsv[2] - step).coerceAtLeast(0f)
+                hsv[1] = (hsv[1] + step / 2f).coerceAtMost(1f)
+                if (hsv[1] > 0.05f) hsv[0] = towards(hsv[0], 240f, 2f + 8f * a)
+            }
+            ShadeMode.SHINE -> {
+                val t = 0.1f + 0.7f * a
+                hsv[2] = hsv[2] + (1f - hsv[2]) * t
+                hsv[1] = hsv[1] + (hsv[1] * 0.25f - hsv[1]) * t
+                if (hsv[1] > 0.03f) hsv[0] = towards(hsv[0], 55f, 12f * t)
             }
             ShadeMode.NOISE -> {
-                val d = (kotlin.random.Random.nextFloat() - 0.5f) * 0.12f
-                hsv[2] = (hsv[2] + d).coerceIn(0f, 1f)
+                hsv[2] = (hsv[2] + rnd() * (0.02f + 0.23f * a)).coerceIn(0f, 1f)
             }
-            ShadeMode.DITHER -> {}
+            ShadeMode.NOISY_PEN, ShadeMode.DITHER -> {}
         }
         return android.graphics.Color.HSVToColor(p ushr 24, hsv)
     }
@@ -604,6 +632,10 @@ class AppState(private val context: Context) {
     fun changePreviewBg(index: Int) {
         previewBg = index
         prefs.edit().putInt("previewBg", index).apply()
+    }
+
+    fun saveShadeAmount() {
+        prefs.edit().putFloat("shadeAmount", shadeAmount).apply()
     }
 
     fun toggleLabels() {

@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -178,17 +180,50 @@ fun EditorScreen(state: AppState) {
         }
 
         if (state.tool == Tool.SHADE) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)
-            ) {
-                listOf(
-                    ShadeMode.LIGHTEN to "Lighten",
-                    ShadeMode.DARKEN to "Darken",
-                    ShadeMode.DITHER to "Dither",
-                    ShadeMode.NOISE to "Noise"
-                ).forEach { (mode, label) ->
-                    BlockButton(onClick = { state.shadeMode = mode }, label = label, selected = state.shadeMode == mode)
+            Panel(Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        ShadeMode.LIGHTEN to "Lighten",
+                        ShadeMode.DARKEN to "Darken",
+                        ShadeMode.SHINE to "Shine",
+                        ShadeMode.NOISE to "Noise",
+                        ShadeMode.NOISY_PEN to "Noisy pen",
+                        ShadeMode.DITHER to "Dither"
+                    ).chunked(3).forEach { row ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            row.forEach { (mode, label) ->
+                                BlockButton(
+                                    onClick = { state.shadeMode = mode },
+                                    label = label,
+                                    selected = state.shadeMode == mode,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+                if (state.shadeMode != ShadeMode.DITHER) {
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PixelText("Amount", 13.sp)
+                        Slider(
+                            value = state.shadeAmount,
+                            onValueChange = { state.shadeAmount = it },
+                            onValueChangeFinished = { state.saveShadeAmount() },
+                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                            colors = SliderDefaults.colors(
+                                thumbColor = Blocky.Green,
+                                activeTrackColor = Blocky.Green,
+                                inactiveTrackColor = Blocky.ButtonDark
+                            )
+                        )
+                        PixelText(
+                            "${(state.shadeAmount * 100).roundToInt()}%",
+                            13.sp,
+                            modifier = Modifier.widthIn(min = 40.dp),
+                            textAlign = TextAlign.End
+                        )
+                    }
                 }
             }
         }
