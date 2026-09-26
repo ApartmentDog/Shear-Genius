@@ -51,12 +51,16 @@ private val PARTS = listOf("Head", "Body", "R arm", "L arm", "R leg", "L leg")
 
 @Composable
 fun PreviewScreen(state: AppState) {
-    LaunchedEffect(state.spin) {
-        if (state.spin) {
+    LaunchedEffect(state.spin, state.walk) {
+        if (state.spin || state.walk) {
             var last = 0L
             while (true) {
                 withFrameNanos { t ->
-                    if (last != 0L) state.previewRy += (t - last) / 1_000_000_000f * 0.9f
+                    if (last != 0L) {
+                        val dt = (t - last) / 1_000_000_000f
+                        if (state.spin) state.previewRy += dt * 0.9f
+                        if (state.walk) state.walkPhase += dt * 5.5f
+                    }
                     last = t
                 }
             }
@@ -77,6 +81,7 @@ fun PreviewScreen(state: AppState) {
                 showOverlay = state.previewOverlay,
                 hidden = state.previewHidden,
                 background = PREVIEW_BACKGROUNDS[bgIndex].second,
+                swing = state.previewSwing,
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
@@ -87,15 +92,19 @@ fun PreviewScreen(state: AppState) {
             Spacer(Modifier.height(6.dp))
             PixelText("Drag to rotate. Pinch to zoom.", 12.sp)
             Spacer(Modifier.height(10.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 BlockButton(
                     onClick = { state.previewOverlay = !state.previewOverlay },
                     label = "Overlay",
                     selected = state.previewOverlay
                 )
                 BlockButton(onClick = { state.spin = !state.spin }, label = "Spin", selected = state.spin)
+                BlockButton(onClick = {
+                    state.walk = !state.walk
+                    if (!state.walk) state.walkPhase = 0f
+                }, label = "Walk", selected = state.walk)
                 Spacer(Modifier.weight(1f))
-                BlockButton(onClick = { state.resetPreview() }, label = "Reset view")
+                BlockButton(onClick = { state.resetPreview() }, label = "Reset")
             }
         }
 

@@ -77,6 +77,9 @@ class AppState(private val context: Context) {
     var previewZoom by mutableFloatStateOf(1f)
     var previewOverlay by mutableStateOf(true)
     var spin by mutableStateOf(false)
+    var walk by mutableStateOf(false)
+    var walkPhase by mutableFloatStateOf(0f)
+    val previewSwing: Float get() = if (walk) kotlin.math.sin(walkPhase) * 0.6f else 0f
     var previewHidden by mutableStateOf(emptySet<Int>())
     var previewBg by mutableIntStateOf(0)
         private set

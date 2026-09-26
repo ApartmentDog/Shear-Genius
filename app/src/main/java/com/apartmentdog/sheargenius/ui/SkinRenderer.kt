@@ -65,7 +65,8 @@ object SkinRenderer {
         ry: Float,
         zoom: Float,
         width: Float,
-        height: Float
+        height: Float,
+        swing: Float = 0f
     ) {
         val boxes = SkinLayout.boxes(slim)
         val cY = cos(ry)
@@ -82,6 +83,25 @@ object SkinRenderer {
             out[0] = x1
             out[1] = y * cX - z1 * sX
             out[2] = y * sX + z1 * cX
+        }
+
+        // Limb pose: rotation about the X axis around a pivot at the shoulder or hip.
+        var poseA = 0f
+        var poseY = 0f
+        var poseC = 1f
+        var poseS = 0f
+        fun setPose(a: Float, pivotY: Float) {
+            poseA = a
+            poseY = pivotY
+            poseC = cos(a)
+            poseS = sin(a)
+        }
+        fun posePoint(p: FloatArray, o: Int) {
+            if (poseA == 0f) return
+            val y = p[o + 1] - poseY
+            val z = p[o + 2]
+            p[o + 1] = poseY + y * poseC - z * poseS
+            p[o + 2] = y * poseS + z * poseC
         }
 
         fun drawBox(box: SkinBox, c: FloatArray, inf: Float) {
@@ -139,6 +159,13 @@ object SkinRenderer {
                         tx = u + d + w; ty = v; tw = w; th = d
                     }
                 }
+                if (poseA != 0f) {
+                    val py = ny * poseC - nz * poseS
+                    val pz = ny * poseS + nz * poseC
+                    ny = py
+                    nz = pz
+                }
+                for (k in 0 until 4) posePoint(corners, k * 3)
                 rot(nx, ny, nz, tmp)
                 if (tmp[2] <= 0.01f) continue
                 val dot = max(0f, tmp[0] * light[0] + tmp[1] * light[1] + tmp[2] * light[2])
@@ -162,8 +189,20 @@ object SkinRenderer {
             }
         }
 
+        // Pair order: head, body, right arm, left arm, right leg, left leg.
+        fun limbAngle(p: Int): Float = when (p) {
+            2 -> swing
+            3 -> -swing
+            4 -> -swing
+            5 -> swing
+            else -> 0f
+        }
+        fun pivotY(p: Int): Float = if (p == 2 || p == 3) 8f else -4f
+
         val order = (0 until 6).sortedBy { p ->
-            val c = centerOf(boxes[p * 2].id, slim)
+            val c = centerOf(boxes[p * 2].id, slim).copyOf()
+            setPose(limbAngle(p), pivotY(p))
+            posePoint(c, 0)
             rot(c[0], c[1], c[2], tmp)
             tmp[2]
         }
@@ -172,6 +211,7 @@ object SkinRenderer {
             val base = boxes[p * 2]
             val over = boxes[p * 2 + 1]
             val c = centerOf(base.id, slim)
+            setPose(limbAngle(p), pivotY(p))
             drawBox(base, c, 0f)
             if (showOverlay) drawBox(over, c, if (over.id == "hat") 0.5f else 0.25f)
         }
@@ -193,7 +233,8 @@ fun SkinModelView(
     showOverlay: Boolean,
     modifier: Modifier = Modifier,
     hidden: Set<Int> = emptySet(),
-    background: Int = 0xFF2C2C2A.toInt()
+    background: Int = 0xFF2C2C2A.toInt(),
+    swing: Float = 0f
 ) {
     val bitmap = remember { Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888) }
     val paint = remember(bitmap) { SkinRenderer.newPaint(bitmap) }
@@ -223,7 +264,7 @@ fun SkinModelView(
             drawRect(androidx.compose.ui.graphics.Color(background))
         }
         drawIntoCanvas {
-            SkinRenderer.draw(it.nativeCanvas, paint, slim, showOverlay, hidden, rx, ry, zoom, size.width, size.height)
+            SkinRenderer.draw(it.nativeCanvas, paint, slim, showOverlay, hidden, rx, ry, zoom, size.width, size.height, swing)
         }
     }
 }

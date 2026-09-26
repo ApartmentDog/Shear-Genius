@@ -24,7 +24,8 @@ object RenderExport {
         if (background != null) c.drawColor(background)
         SkinRenderer.draw(
             c, skinPaint(state), state.slim, state.previewOverlay, state.previewHidden,
-            state.previewRx, state.previewRy, state.previewZoom, size.toFloat(), size.toFloat()
+            state.previewRx, state.previewRy, state.previewZoom, size.toFloat(), size.toFloat(),
+            state.previewSwing
         )
         return out
     }
