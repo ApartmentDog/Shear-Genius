@@ -484,6 +484,29 @@ private fun SkinCanvas(
             )
         }
         if (state.showLabels) {
+            val borderColor = Color.Black.copy(alpha = 0.55f)
+            for (gy in 0..64) {
+                for (gx in 0 until 64) {
+                    val above = if (gy > 0) map[(gy - 1) * 64 + gx] else -1
+                    val below = if (gy < 64) map[gy * 64 + gx] else -1
+                    if (above != below) {
+                        val lx0 = o.x + gx * cell
+                        val ly = o.y + gy * cell
+                        drawLine(borderColor, Offset(lx0, ly), Offset(lx0 + cell, ly), 1.4f)
+                    }
+                }
+            }
+            for (gx in 0..64) {
+                for (gy in 0 until 64) {
+                    val left = if (gx > 0) map[gy * 64 + (gx - 1)] else -1
+                    val right = if (gx < 64) map[gy * 64 + gx] else -1
+                    if (left != right) {
+                        val lx = o.x + gx * cell
+                        val ly0 = o.y + gy * cell
+                        drawLine(borderColor, Offset(lx, ly0), Offset(lx, ly0 + cell), 1.4f)
+                    }
+                }
+            }
             val ts = 11.sp.toPx()
             labelFill.textSize = ts
             labelStroke.textSize = ts
