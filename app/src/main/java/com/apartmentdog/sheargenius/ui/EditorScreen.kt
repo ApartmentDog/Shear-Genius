@@ -286,6 +286,8 @@ fun EditorScreen(state: AppState) {
                 PixelText(hexOf(state.color), 16.sp, modifier = Modifier.weight(1f))
                 BlockButton(onClick = { state.addToPalette(state.color) }, icon = PixelIcons.Plus, label = "Save")
             }
+            Spacer(Modifier.height(8.dp))
+            BlockButton(onClick = { state.addDyeColors() }, label = "Add dye colors", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(10.dp))
             PaletteGrid(
                 state.palette,

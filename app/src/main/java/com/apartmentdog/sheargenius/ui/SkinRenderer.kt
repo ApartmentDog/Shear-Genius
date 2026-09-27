@@ -275,12 +275,12 @@ object SkinRenderer {
             return floatArrayOf(pivotY + yy * poseC - z * poseS, yy * poseS + z * poseC)
         }
 
-        fun considerBox(box: SkinBox, c: FloatArray, poseAngle: Float, pivotY: Float) {
+        fun considerBox(box: SkinBox, c: FloatArray, poseAngle: Float, pivotY: Float, inf: Float) {
             val poseC = cos(poseAngle)
             val poseS = sin(poseAngle)
-            val hw = box.w / 2f
-            val hh = box.h / 2f
-            val hd = box.d / 2f
+            val hw = box.w / 2f + inf
+            val hh = box.h / 2f + inf
+            val hd = box.d / 2f + inf
             val x0 = c[0] - hw; val x1 = c[0] + hw
             val y0 = c[1] - hh; val y1 = c[1] + hh
             val z0 = c[2] - hd; val z1 = c[2] + hd
@@ -370,8 +370,8 @@ object SkinRenderer {
             val base = boxes[p * 2]
             val over = boxes[p * 2 + 1]
             val c = centerOf(base.id, slim)
-            considerBox(base, c, limbAngle(p), pivotY(p))
-            if (showOverlay) considerBox(over, c, limbAngle(p), pivotY(p))
+            considerBox(base, c, limbAngle(p), pivotY(p), 0f)
+            if (showOverlay) considerBox(over, c, limbAngle(p), pivotY(p), if (over.id == "hat") 0.5f else 0.25f)
         }
         return bestPixel
     }

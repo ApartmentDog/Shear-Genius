@@ -3,6 +3,8 @@ package com.apartmentdog.sheargenius.ui
 import android.graphics.BitmapFactory
 import android.text.format.DateUtils
 import android.widget.Toast
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -66,6 +68,41 @@ fun FilesScreen(state: AppState) {
             Toast.makeText(context, if (ok) "Skin exported" else "Couldn't export to that location", Toast.LENGTH_SHORT).show()
         }
     }
+    val backupSaver = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri != null) {
+            val ok = try {
+                context.contentResolver.openOutputStream(uri)?.use { state.backupAll(it) }
+                true
+            } catch (e: Exception) {
+                false
+            }
+            Toast.makeText(context, if (ok) "Backup saved" else "Couldn't save the backup", Toast.LENGTH_SHORT).show()
+        }
+    }
+    val backupOpener = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val count = try {
+                context.contentResolver.openInputStream(uri)?.use { state.restoreAll(it) } ?: 0
+            } catch (e: Exception) {
+                -1
+            }
+            Toast.makeText(
+                context,
+                if (count > 0) "Restored $count project${if (count == 1) "" else "s"}"
+                else if (count == 0) "That backup had nothing to restore" else "Couldn't read that backup",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+    var exportIssues by remember { mutableStateOf<List<String>>(emptyList()) }
+    fun requestExport() {
+        val issues = state.transparencyIssues()
+        if (issues.isEmpty()) {
+            saver.launch("${state.projectName}.png")
+        } else {
+            exportIssues = issues
+        }
+    }
     val opener = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             val err = state.importSkin(uri)
@@ -86,7 +123,7 @@ fun FilesScreen(state: AppState) {
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BlockButton(
-                    onClick = { saver.launch("${state.projectName}.png") },
+                    onClick = { requestExport() },
                     icon = PixelIcons.Disk,
                     label = "Export PNG"
                 )
@@ -97,6 +134,17 @@ fun FilesScreen(state: AppState) {
             }
             Spacer(Modifier.height(8.dp))
             PixelText("Exports are 64×64 PNGs ready to upload to Minecraft: Java Edition.", 12.sp)
+        }
+
+        Panel(Modifier.fillMaxWidth()) {
+            PixelText("Backup", 16.sp)
+            Spacer(Modifier.height(4.dp))
+            PixelText("Save every project, its layers and its reference images to one file, or bring them back from one.", 12.sp)
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                BlockButton(onClick = { backupSaver.launch("ShearGenius-backup.zip") }, label = "Backup all")
+                BlockButton(onClick = { backupOpener.launch(arrayOf("application/zip")) }, label = "Restore")
+            }
         }
 
         Panel(Modifier.fillMaxWidth()) {
@@ -186,6 +234,28 @@ fun FilesScreen(state: AppState) {
             showPlayer = false
             state.screen = Screen.EDITOR
         }, onDismiss = { showPlayer = false })
+    }
+
+    if (exportIssues.isNotEmpty()) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { exportIssues = emptyList() },
+            title = { androidx.compose.material3.Text("Transparent pixels found") },
+            text = {
+                androidx.compose.material3.Text(
+                    "These zones have see-through pixels on the base layer, which some launchers and servers render oddly: " +
+                        exportIssues.joinToString(", ") + ". Export anyway?"
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    saver.launch("${state.projectName}.png")
+                    exportIssues = emptyList()
+                }) { androidx.compose.material3.Text("Export anyway") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { exportIssues = emptyList() }) { androidx.compose.material3.Text("Cancel") }
+            }
+        )
     }
 
     deleteFor?.let { p ->

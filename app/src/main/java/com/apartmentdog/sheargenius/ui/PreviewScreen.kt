@@ -20,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import android.widget.Toast
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +36,7 @@ import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.sp
 import com.apartmentdog.sheargenius.AppState
 import com.apartmentdog.sheargenius.Tool
@@ -203,7 +205,33 @@ private fun RenderPanel(state: AppState, background: Int) {
             BlockButton(onClick = { deliver(RenderExport.turnaround(state, bg), "turnaround") }, label = "Save turnaround")
         }
         Spacer(Modifier.height(8.dp))
+        BlockButton(onClick = { deliver(RenderExport.proofSheet(state, bg), "proof sheet") }, label = "Save proof sheet", modifier = Modifier.fillMaxWidth())
+        Spacer(Modifier.height(8.dp))
         BlockButton(onClick = { shareAfter = !shareAfter }, label = "Share after saving", selected = shareAfter)
+        Spacer(Modifier.height(10.dp))
+        var wmText by remember(state.watermarkText) { mutableStateOf(state.watermarkText) }
+        BlockButton(
+            onClick = { state.setWatermark(!state.watermarkOn, wmText) },
+            label = "Watermark",
+            selected = state.watermarkOn,
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (state.watermarkOn) {
+            Spacer(Modifier.height(8.dp))
+            BasicTextField(
+                value = wmText,
+                onValueChange = { t ->
+                    wmText = t.take(40)
+                    state.setWatermark(true, wmText)
+                },
+                singleLine = true,
+                textStyle = TextStyle(fontFamily = LocalPixelFont.current, fontSize = 14.sp, color = Blocky.Text),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .bevel(Color.White, Blocky.ButtonDark, Color.White, 2.dp, null)
+                    .padding(8.dp)
+            )
+        }
         Spacer(Modifier.height(6.dp))
         PixelText("Uses the current angle, zoom, parts and background. Pick Clear for a transparent PNG.", 11.sp)
     }

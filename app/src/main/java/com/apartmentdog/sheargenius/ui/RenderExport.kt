@@ -35,8 +35,42 @@ object RenderExport {
         val out = Bitmap.createBitmap(panelW * 4, panelH, Bitmap.Config.ARGB_8888)
         val c = Canvas(out)
         if (background != null) c.drawColor(background)
+        drawTurnaroundPanels(c, state, panelW, panelH, null)
+        if (state.watermarkOn && state.watermarkText.isNotBlank()) drawWatermark(c, state.watermarkText, out.width, out.height)
+        return out
+    }
+
+    /** Turnaround with a name label under each panel and the project name as a header. */
+    fun proofSheet(state: AppState, background: Int?, panelW: Int = 512, panelH: Int = 768): Bitmap {
+        val headerH = (panelH * 0.09f).toInt()
+        val labelH = (panelH * 0.09f).toInt()
+        val out = Bitmap.createBitmap(panelW * 4, headerH + panelH + labelH, Bitmap.Config.ARGB_8888)
+        val c = Canvas(out)
+        if (background != null) c.drawColor(background) else c.drawColor(android.graphics.Color.WHITE)
+        val header = android.graphics.Paint().apply {
+            isAntiAlias = true
+            color = 0xFF2C2C2A.toInt()
+            textAlign = android.graphics.Paint.Align.CENTER
+            textSize = headerH * 0.6f
+        }
+        c.drawText(state.projectName, out.width / 2f, headerH * 0.7f, header)
+        c.save()
+        c.translate(0f, headerH.toFloat())
+        drawTurnaroundPanels(c, state, panelW, panelH, listOf("Front", "Right side", "Back", "Left side"))
+        c.restore()
+        if (state.watermarkOn && state.watermarkText.isNotBlank()) drawWatermark(c, state.watermarkText, out.width, out.height)
+        return out
+    }
+
+    private fun drawTurnaroundPanels(c: Canvas, state: AppState, panelW: Int, panelH: Int, labels: List<String>?) {
         val paint = skinPaint(state)
         val angles = floatArrayOf(0f, (Math.PI / 2).toFloat(), Math.PI.toFloat(), (-Math.PI / 2).toFloat())
+        val labelPaint = if (labels != null) android.graphics.Paint().apply {
+            isAntiAlias = true
+            color = 0xFF2C2C2A.toInt()
+            textAlign = android.graphics.Paint.Align.CENTER
+            textSize = panelH * 0.06f
+        } else null
         for (i in 0 until 4) {
             c.save()
             c.translate((i * panelW).toFloat(), 0f)
@@ -44,9 +78,21 @@ object RenderExport {
                 c, paint, state.slim, state.previewOverlay, state.previewHidden,
                 0.12f, angles[i], 1f, panelW.toFloat(), panelH.toFloat()
             )
+            labelPaint?.let { c.drawText(labels!![i], panelW / 2f, panelH * 0.95f, it) }
             c.restore()
         }
-        return out
+    }
+
+    private fun drawWatermark(c: Canvas, text: String, w: Int, h: Int) {
+        val size = h * 0.028f
+        val paint = android.graphics.Paint().apply {
+            isAntiAlias = true
+            color = android.graphics.Color.argb(160, 255, 255, 255)
+            textAlign = android.graphics.Paint.Align.RIGHT
+            textSize = size
+            setShadowLayer(size * 0.25f, 0f, 0f, android.graphics.Color.argb(160, 0, 0, 0))
+        }
+        c.drawText(text, w - size * 0.8f, h - size * 0.8f, paint)
     }
 
     fun save(context: Context, bitmap: Bitmap, baseName: String): Uri? {

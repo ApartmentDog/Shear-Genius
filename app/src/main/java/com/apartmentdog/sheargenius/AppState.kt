@@ -17,7 +17,11 @@ import com.apartmentdog.sheargenius.model.SkinLayout
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.InputStream
 import java.io.OutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import kotlin.concurrent.thread
 
 enum class Tool { PENCIL, ERASER, LINE, FILL, EYEDROPPER, SHADE, SELECT, MOVE }
@@ -43,6 +47,14 @@ data class Layer(val id: Long, val name: String, val visible: Boolean, val pixel
 private class UndoStep(val layers: List<Layer>, val active: Int, val slim: Boolean)
 
 const val MAX_LAYERS = 12
+
+/** Minecraft's 16 dye colors. */
+val DYE_COLORS = listOf(
+    0xFFF9FFFE.toInt(), 0xFFF9801D.toInt(), 0xFFC74EBD.toInt(), 0xFF3AB3DA.toInt(),
+    0xFFFED83D.toInt(), 0xFF80C71F.toInt(), 0xFFF38BAA.toInt(), 0xFF474F52.toInt(),
+    0xFF9D9D97.toInt(), 0xFF169C9C.toInt(), 0xFF8932B8.toInt(), 0xFF3C44AA.toInt(),
+    0xFF835432.toInt(), 0xFF5E7C16.toInt(), 0xFFB02E26.toInt(), 0xFF1D1D21.toInt()
+)
 
 private val DEFAULT_PALETTE = listOf(
     0xFF4A1B0C.toInt(), 0xFF712B13.toInt(), 0xFF993C1D.toInt(), 0xFFD85A30.toInt(),
@@ -97,6 +109,10 @@ class AppState(private val context: Context) {
     var walk by mutableStateOf(false)
     var walkPhase by mutableFloatStateOf(0f)
     val previewSwing: Float get() = if (walk) kotlin.math.sin(walkPhase) * 0.6f else 0f
+    var watermarkOn by mutableStateOf(false)
+        private set
+    var watermarkText by mutableStateOf("")
+        private set
     var previewHidden by mutableStateOf(emptySet<Int>())
     var previewBg by mutableIntStateOf(0)
         private set
@@ -121,6 +137,8 @@ class AppState(private val context: Context) {
         miniPreview = prefs.getBoolean("miniPreview", false)
         showOnboarding = !prefs.getBoolean("onboardingSeen", false)
         previewBg = prefs.getInt("previewBg", 0)
+        watermarkOn = prefs.getBoolean("wmOn", false)
+        watermarkText = prefs.getString("wmText", "") ?: ""
         showLabels = prefs.getBoolean("labels", true)
         shadeAmount = prefs.getFloat("shadeAmount", 0.5f)
         migrateLegacy()
@@ -979,6 +997,100 @@ class AppState(private val context: Context) {
 
     fun togglePart(part: Int) {
         previewHidden = if (part in previewHidden) previewHidden - part else previewHidden + part
+    }
+
+    fun setWatermark(on: Boolean, text: String) {
+        watermarkOn = on
+        watermarkText = text.take(40)
+        prefs.edit().putBoolean("wmOn", on).putString("wmText", watermarkText).apply()
+    }
+
+    // ---- Minecraft dye colors, added to the current palette without replacing it
+
+    fun addDyeColors() {
+        for (c in DYE_COLORS) {
+            if (c !in palette) {
+                palette.add(c)
+                if (palette.size > 35) palette.removeAt(0)
+            }
+        }
+        saveMeta()
+    }
+
+    // ---- export validity check
+
+    private val BASE_PART_NAMES = mapOf(
+        "head" to "Head", "body" to "Body", "rarm" to "Right arm",
+        "larm" to "Left arm", "rleg" to "Right leg", "lleg" to "Left leg"
+    )
+
+    /** Zones (base layer only) that have any transparent or partially transparent pixel. */
+    fun transparencyIssues(): List<String> {
+        val comp = composite()
+        val map = regionMap
+        val found = LinkedHashSet<String>()
+        for (i in comp.indices) {
+            val b = map[i]
+            if (b < 0) continue
+            val box = boxes[b]
+            if (box.overlay) continue
+            if ((comp[i] ushr 24) < 255) BASE_PART_NAMES[box.id]?.let { found.add(it) }
+        }
+        return found.toList()
+    }
+
+    // ---- backup and restore (zip of every project's own folder)
+
+    fun backupAll(out: OutputStream) {
+        ZipOutputStream(out).use { zos ->
+            projectsDir.listFiles()?.filter { it.isDirectory }?.forEach { dir ->
+                zipDir(zos, dir, dir.name)
+            }
+        }
+    }
+
+    private fun zipDir(zos: ZipOutputStream, dir: File, base: String) {
+        dir.listFiles()?.forEach { f ->
+            val name = "$base/${f.name}"
+            if (f.isDirectory) {
+                zipDir(zos, f, name)
+            } else {
+                zos.putNextEntry(ZipEntry(name))
+                f.inputStream().use { it.copyTo(zos) }
+                zos.closeEntry()
+            }
+        }
+    }
+
+    /** Extracts every project folder from the zip under a fresh id, so nothing already here is overwritten. Returns how many projects were restored. */
+    fun restoreAll(input: InputStream): Int {
+        val idMap = HashMap<String, String>()
+        ZipInputStream(input).use { zis ->
+            var entry = zis.nextEntry
+            while (entry != null) {
+                if (!entry.isDirectory) {
+                    val parts = entry.name.split('/')
+                    if (parts.size >= 2) {
+                        val oldId = parts[0]
+                        val newId = idMap.getOrPut(oldId) { freshProjectId() }
+                        val rest = parts.drop(1).joinToString("/")
+                        val outFile = File(dirOf(newId), rest)
+                        outFile.parentFile?.mkdirs()
+                        outFile.outputStream().use { zis.copyTo(it) }
+                    }
+                }
+                zis.closeEntry()
+                entry = zis.nextEntry
+            }
+        }
+        refreshProjects()
+        return idMap.size
+    }
+
+    private fun freshProjectId(): String {
+        var candidate = System.currentTimeMillis()
+        while (dirOf(candidate.toString()).exists()) candidate++
+        return candidate.toString()
     }
 
     fun changePreviewBg(index: Int) {
