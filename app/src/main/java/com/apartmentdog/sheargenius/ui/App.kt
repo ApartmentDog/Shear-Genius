@@ -67,7 +67,7 @@ private fun Header(state: AppState) {
             PixelText(state.projectName, 12.sp, Color(0xFF4A3526), maxLines = 1, lineHeight = 15.sp)
         }
         Spacer(Modifier.width(8.dp))
-        if (state.screen == Screen.EDITOR) {
+        if (state.screen == Screen.EDITOR || (state.screen == Screen.PREVIEW && state.paintOnModel)) {
             BlockButton(onClick = { state.undo() }, icon = PixelIcons.Undo, enabled = state.canUndo)
             Spacer(Modifier.width(8.dp))
             BlockButton(onClick = { state.redo() }, icon = PixelIcons.Redo, enabled = state.canRedo)
