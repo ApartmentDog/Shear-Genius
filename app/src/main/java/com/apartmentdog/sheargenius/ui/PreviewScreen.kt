@@ -37,6 +37,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
 import com.apartmentdog.sheargenius.AppState
 import com.apartmentdog.sheargenius.Tool
@@ -70,6 +71,7 @@ fun PreviewScreen(state: AppState) {
         }
     }
     val bgIndex = state.previewBg.coerceIn(0, PREVIEW_BACKGROUNDS.lastIndex)
+    var showColorDialog by remember { mutableStateOf(false) }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
@@ -103,19 +105,29 @@ fun PreviewScreen(state: AppState) {
                     listOf(
                         Tool.PENCIL to PixelIcons.Pencil,
                         Tool.ERASER to PixelIcons.Eraser,
+                        Tool.LINE to PixelIcons.Line,
                         Tool.FILL to PixelIcons.Bucket,
-                        Tool.EYEDROPPER to PixelIcons.Dropper
+                        Tool.EYEDROPPER to PixelIcons.Dropper,
+                        Tool.SHADE to PixelIcons.Shade
                     ).forEach { (t, icon) ->
-                        Slot(size = 38.dp, selected = state.tool == t, onClick = { state.tool = t }) {
+                        Slot(size = 36.dp, selected = state.tool == t, onClick = { state.tool = t }) {
                             PixelIconView(icon, Blocky.IconDark, Modifier.size(20.dp))
                         }
                     }
-                    Slot(size = 38.dp, selected = state.mirror, onClick = { state.mirror = !state.mirror }) {
+                    Slot(size = 36.dp, selected = state.mirror, onClick = { state.mirror = !state.mirror }) {
                         PixelIconView(PixelIcons.Mirror, Blocky.IconDark, Modifier.size(20.dp))
                     }
                 }
                 Spacer(Modifier.height(6.dp))
                 PixelText("Drag to paint. Two fingers to rotate or zoom.", 12.sp)
+                Spacer(Modifier.height(10.dp))
+                if (state.tool == Tool.SHADE) {
+                    ShadeControls(state)
+                    Spacer(Modifier.height(10.dp))
+                }
+                ColorPanel(state, onEditColor = { showColorDialog = true })
+                Spacer(Modifier.height(6.dp))
+                PixelText("Select isn't available here — a dragged rectangle doesn't map cleanly onto a rotating model.", 11.sp)
             } else {
                 PixelText("Drag to rotate. Pinch to zoom.", 12.sp)
             }
@@ -179,6 +191,18 @@ fun PreviewScreen(state: AppState) {
         }
 
         RenderPanel(state, PREVIEW_BACKGROUNDS[bgIndex].second)
+    }
+
+    if (showColorDialog) {
+        ColorDialog(
+            initial = state.color,
+            onDismiss = { showColorDialog = false },
+            onApply = {
+                state.color = it
+                state.savePrefs()
+            },
+            onSave = { state.addToPalette(it) }
+        )
     }
 }
 
@@ -261,23 +285,56 @@ private suspend fun PointerInputScope.modelPaintGestures(state: AppState) {
         val before = state.copyPixels()
         var multi = false
         var changed = false
+        var last: IntOffset? = null
+        val visited = HashSet<Int>()
+        val shading = state.tool == Tool.SHADE
+        val lining = state.tool == Tool.LINE
 
-        fun paintAt(pos: androidx.compose.ui.geometry.Offset) {
+        fun hitPixel(pos: androidx.compose.ui.geometry.Offset): IntOffset? {
             val idx = SkinRenderer.hitTest(
                 state.slim, state.previewOverlay, state.previewHidden,
                 state.previewRx, state.previewRy, state.previewZoom, state.previewSwing,
                 size.width.toFloat(), size.height.toFloat(), pos.x, pos.y
-            ) ?: return
-            val hit = when (state.tool) {
-                com.apartmentdog.sheargenius.Tool.ERASER -> state.setPixel(idx, 0)
-                com.apartmentdog.sheargenius.Tool.FILL -> state.fill(idx, state.color)
-                com.apartmentdog.sheargenius.Tool.EYEDROPPER -> { state.pick(idx); false }
+            ) ?: return null
+            return IntOffset(idx % 64, idx / 64)
+        }
+
+        fun paintPixel(p: IntOffset) {
+            val idx = p.y * 64 + p.x
+            val hit = when {
+                shading -> state.shade(idx, visited)
+                state.tool == Tool.ERASER -> state.setPixel(idx, 0)
                 else -> state.setPixel(idx, state.color)
             }
             if (hit) changed = true
         }
 
-        paintAt(down.position)
+        fun strokeTo(pos: androidx.compose.ui.geometry.Offset) {
+            val cur = hitPixel(pos) ?: run { last = null; return }
+            val from = last ?: cur
+            line(from, cur) { x, y -> paintPixel(IntOffset(x, y)) }
+            last = cur
+        }
+
+        val lineStart = if (lining) hitPixel(down.position) else null
+
+        fun previewLine(pos: androidx.compose.ui.geometry.Offset) {
+            val start = lineStart ?: return
+            val end = hitPixel(pos) ?: return
+            state.restore(before)
+            changed = false
+            val c = state.color
+            line(start, end) { x, y -> if (state.setPixel(y * 64 + x, c)) changed = true }
+        }
+
+        when {
+            lining -> previewLine(down.position)
+            state.tool == Tool.FILL -> hitPixel(down.position)?.let {
+                if (state.fill(it.y * 64 + it.x, state.color)) changed = true
+            }
+            state.tool == Tool.EYEDROPPER -> hitPixel(down.position)?.let { state.pick(it.y * 64 + it.x) }
+            else -> strokeTo(down.position)
+        }
         down.consume()
 
         do {
@@ -296,11 +353,13 @@ private suspend fun PointerInputScope.modelPaintGestures(state: AppState) {
                 state.previewZoom = (state.previewZoom * zoom).coerceIn(0.5f, 3f)
                 state.previewRy += pan.x * 0.012f
                 state.previewRx = (state.previewRx + pan.y * 0.012f).coerceIn(-1.4f, 1.4f)
-            } else if (!multi && pressed == 1 &&
-                state.tool != com.apartmentdog.sheargenius.Tool.FILL &&
-                state.tool != com.apartmentdog.sheargenius.Tool.EYEDROPPER
-            ) {
-                paintAt(event.changes.first { it.pressed }.position)
+            } else if (!multi && pressed == 1) {
+                val pos = event.changes.first { it.pressed }.position
+                when {
+                    lining -> previewLine(pos)
+                    state.tool == Tool.FILL || state.tool == Tool.EYEDROPPER -> {}
+                    else -> strokeTo(pos)
+                }
             }
             event.changes.forEach { if (it.positionChanged()) it.consume() }
         } while (event.changes.any { it.pressed })

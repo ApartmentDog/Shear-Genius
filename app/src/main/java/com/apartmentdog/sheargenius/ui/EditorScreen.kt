@@ -194,52 +194,7 @@ fun EditorScreen(state: AppState) {
         )
 
         if (state.tool == Tool.SHADE) {
-            Panel(Modifier.fillMaxWidth()) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(
-                        ShadeMode.LIGHTEN to "Lighten",
-                        ShadeMode.DARKEN to "Darken",
-                        ShadeMode.SHINE to "Shine",
-                        ShadeMode.NOISE to "Noise",
-                        ShadeMode.NOISY_PEN to "Noisy pen",
-                        ShadeMode.DITHER to "Dither"
-                    ).chunked(3).forEach { row ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            row.forEach { (mode, label) ->
-                                BlockButton(
-                                    onClick = { state.shadeMode = mode },
-                                    label = label,
-                                    selected = state.shadeMode == mode,
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
-                    }
-                }
-                if (state.shadeMode != ShadeMode.DITHER) {
-                    Spacer(Modifier.height(6.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        PixelText("Amount", 13.sp)
-                        Slider(
-                            value = state.shadeAmount,
-                            onValueChange = { state.shadeAmount = it },
-                            onValueChangeFinished = { state.saveShadeAmount() },
-                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                            colors = SliderDefaults.colors(
-                                thumbColor = Blocky.Green,
-                                activeTrackColor = Blocky.Green,
-                                inactiveTrackColor = Blocky.ButtonDark
-                            )
-                        )
-                        PixelText(
-                            "${(state.shadeAmount * 100).roundToInt()}%",
-                            13.sp,
-                            modifier = Modifier.widthIn(min = 40.dp),
-                            textAlign = TextAlign.End
-                        )
-                    }
-                }
-            }
+            ShadeControls(state)
         }
 
         if (state.tool == Tool.SELECT) {
@@ -278,24 +233,7 @@ fun EditorScreen(state: AppState) {
             }
         }
 
-        Panel(Modifier.fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Slot(size = 48.dp, onClick = { showColor = true }) {
-                    Box(Modifier.size(28.dp).background(Color(state.color)))
-                }
-                PixelText(hexOf(state.color), 16.sp, modifier = Modifier.weight(1f))
-                BlockButton(onClick = { state.addToPalette(state.color) }, icon = PixelIcons.Plus, label = "Save")
-            }
-            Spacer(Modifier.height(8.dp))
-            BlockButton(onClick = { state.addDyeColors() }, label = "Add dye colors", modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(10.dp))
-            PaletteGrid(
-                state.palette,
-                state.color,
-                onPick = { state.color = it },
-                onRemove = { state.removeFromPalette(it) }
-            )
-        }
+        ColorPanel(state, onEditColor = { showColor = true })
     }
 
     val target = pendingSlim
@@ -684,7 +622,7 @@ private suspend fun PointerInputScope.editorGestures(
     }
 }
 
-private fun line(a: IntOffset, b: IntOffset, plot: (Int, Int) -> Unit) {
+fun line(a: IntOffset, b: IntOffset, plot: (Int, Int) -> Unit) {
     var x0 = a.x
     var y0 = a.y
     val dx = abs(b.x - x0)
