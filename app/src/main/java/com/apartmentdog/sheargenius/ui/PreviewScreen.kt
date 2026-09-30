@@ -314,6 +314,7 @@ private suspend fun PointerInputScope.modelPaintGestures(state: AppState) {
             val from = last ?: cur
             line(from, cur) { x, y -> paintPixel(IntOffset(x, y)) }
             last = cur
+            state.touched()
         }
 
         val lineStart = if (lining) hitPixel(down.position) else null
@@ -325,6 +326,7 @@ private suspend fun PointerInputScope.modelPaintGestures(state: AppState) {
             changed = false
             val c = state.color
             line(start, end) { x, y -> if (state.setPixel(y * 64 + x, c)) changed = true }
+            state.touched()
         }
 
         when {
