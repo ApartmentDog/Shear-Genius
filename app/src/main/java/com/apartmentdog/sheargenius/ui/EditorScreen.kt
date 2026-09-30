@@ -468,7 +468,7 @@ private fun SkinCanvas(
 }
 
 /** One finger paints, two fingers zoom and pan. A stroke is rolled back if a second finger lands. */
-suspend fun PointerInputScope.awaitRelevantDown(stylusOnly: Boolean): androidx.compose.ui.input.pointer.PointerInputChange {
+suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.awaitRelevantDown(stylusOnly: Boolean): androidx.compose.ui.input.pointer.PointerInputChange {
     if (!stylusOnly) return awaitFirstDown(requireUnconsumed = false)
     while (true) {
         val event = awaitPointerEvent()
