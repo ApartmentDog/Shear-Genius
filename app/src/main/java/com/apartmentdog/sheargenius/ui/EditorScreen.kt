@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
@@ -179,6 +180,9 @@ fun EditorScreen(state: AppState) {
             ToolSlot(state, Tool.MOVE, PixelIcons.Move)
             Slot(size = 36.dp, selected = state.mirror, onClick = { state.mirror = !state.mirror }) {
                 PixelIconView(PixelIcons.Mirror, Blocky.IconDark, Modifier.size(20.dp))
+            }
+            Slot(size = 36.dp, selected = state.stylusOnly, onClick = { state.toggleStylusOnly() }) {
+                PixelIconView(PixelIcons.Stylus, Blocky.IconDark, Modifier.size(20.dp))
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
@@ -464,6 +468,18 @@ private fun SkinCanvas(
 }
 
 /** One finger paints, two fingers zoom and pan. A stroke is rolled back if a second finger lands. */
+suspend fun PointerInputScope.awaitRelevantDown(stylusOnly: Boolean): androidx.compose.ui.input.pointer.PointerInputChange {
+    if (!stylusOnly) return awaitFirstDown(requireUnconsumed = false)
+    while (true) {
+        val event = awaitPointerEvent()
+        val d = event.changes.firstOrNull { it.type == PointerType.Stylus && it.pressed }
+        if (d != null) return d
+    }
+}
+
+fun androidx.compose.ui.input.pointer.PointerEvent.relevant(stylusOnly: Boolean) =
+    if (stylusOnly) changes.filter { it.type == PointerType.Stylus } else changes
+
 private suspend fun PointerInputScope.editorGestures(
     state: AppState,
     scale: MutableFloatState,
@@ -471,7 +487,7 @@ private suspend fun PointerInputScope.editorGestures(
     marquee: MutableState<SelRect?>
 ) {
     awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false)
+        val down = awaitRelevantDown(state.stylusOnly)
         val before = state.copyPixels()
         var multi = false
         var changed = false
@@ -547,7 +563,8 @@ private suspend fun PointerInputScope.editorGestures(
 
         do {
             val event = awaitPointerEvent()
-            val pressed = event.changes.count { it.pressed }
+            val relevant = event.relevant(state.stylusOnly)
+            val pressed = relevant.count { it.pressed }
             if (pressed >= 2) {
                 if (!multi) {
                     multi = true
@@ -572,10 +589,10 @@ private suspend fun PointerInputScope.editorGestures(
                 offset.value = no
             } else if (!multi && pressed == 1) {
                 if (moveArmed && moveStart != null && moveOriginal != null) {
-                    moveDelta = screenDelta(event.changes.first { it.pressed }.position)
+                    moveDelta = screenDelta(relevant.first { it.pressed }.position)
                     state.previewMove(moveOriginal, moveStart, moveDelta.x, moveDelta.y)
                 } else if (marqueeOrigin != null) {
-                    val cur = clampSkin(event.changes.first { it.pressed }.position)
+                    val cur = clampSkin(relevant.first { it.pressed }.position)
                     marquee.value = SelRect(
                         minOf(marqueeOrigin.x, cur.x), minOf(marqueeOrigin.y, cur.y),
                         maxOf(marqueeOrigin.x, cur.x), maxOf(marqueeOrigin.y, cur.y)
@@ -589,12 +606,12 @@ private suspend fun PointerInputScope.editorGestures(
                         no.y.coerceIn(size.height - full, 0f)
                     )
                 } else {
-                    val pos = event.changes.first { it.pressed }.position
+                    val pos = relevant.first { it.pressed }.position
                     if (pen) stroke(pos) else if (lineStart != null) previewLine(pos)
                 }
             }
             event.changes.forEach { if (it.positionChanged()) it.consume() }
-        } while (event.changes.any { it.pressed })
+        } while (event.relevant(state.stylusOnly).any { it.pressed })
 
         if (!multi) {
             when {

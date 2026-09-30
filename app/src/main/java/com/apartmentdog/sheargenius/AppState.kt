@@ -113,6 +113,8 @@ class AppState(private val context: Context) {
         private set
     var watermarkText by mutableStateOf("")
         private set
+    var stylusOnly by mutableStateOf(false)
+        private set
     var previewHidden by mutableStateOf(emptySet<Int>())
     var previewBg by mutableIntStateOf(0)
         private set
@@ -139,6 +141,7 @@ class AppState(private val context: Context) {
         previewBg = prefs.getInt("previewBg", 0)
         watermarkOn = prefs.getBoolean("wmOn", false)
         watermarkText = prefs.getString("wmText", "") ?: ""
+        stylusOnly = prefs.getBoolean("stylusOnly", false)
         showLabels = prefs.getBoolean("labels", true)
         shadeAmount = prefs.getFloat("shadeAmount", 0.5f)
         migrateLegacy()
@@ -997,6 +1000,11 @@ class AppState(private val context: Context) {
 
     fun togglePart(part: Int) {
         previewHidden = if (part in previewHidden) previewHidden - part else previewHidden + part
+    }
+
+    fun toggleStylusOnly() {
+        stylusOnly = !stylusOnly
+        prefs.edit().putBoolean("stylusOnly", stylusOnly).apply()
     }
 
     fun setWatermark(on: Boolean, text: String) {

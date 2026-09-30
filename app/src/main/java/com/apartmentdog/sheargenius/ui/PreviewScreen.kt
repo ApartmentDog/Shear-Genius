@@ -117,9 +117,16 @@ fun PreviewScreen(state: AppState) {
                     Slot(size = 36.dp, selected = state.mirror, onClick = { state.mirror = !state.mirror }) {
                         PixelIconView(PixelIcons.Mirror, Blocky.IconDark, Modifier.size(20.dp))
                     }
+                    Slot(size = 36.dp, selected = state.stylusOnly, onClick = { state.toggleStylusOnly() }) {
+                        PixelIconView(PixelIcons.Stylus, Blocky.IconDark, Modifier.size(20.dp))
+                    }
                 }
                 Spacer(Modifier.height(6.dp))
-                PixelText("Drag to paint. Two fingers to rotate or zoom.", 12.sp)
+                PixelText(
+                    if (state.stylusOnly) "Stylus only: finger touches are ignored here."
+                    else "Drag to paint. Two fingers to rotate or zoom.",
+                    12.sp
+                )
                 Spacer(Modifier.height(10.dp))
                 if (state.tool == Tool.SHADE) {
                     ShadeControls(state)
@@ -281,7 +288,7 @@ private suspend fun PointerInputScope.previewGestures(state: AppState) {
 
 private suspend fun PointerInputScope.modelPaintGestures(state: AppState) {
     awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false)
+        val down = awaitRelevantDown(state.stylusOnly)
         val before = state.copyPixels()
         var multi = false
         var changed = false
@@ -341,7 +348,8 @@ private suspend fun PointerInputScope.modelPaintGestures(state: AppState) {
 
         do {
             val event = awaitPointerEvent()
-            val pressed = event.changes.count { it.pressed }
+            val relevant = event.relevant(state.stylusOnly)
+            val pressed = relevant.count { it.pressed }
             if (pressed >= 2) {
                 if (!multi) {
                     multi = true
@@ -356,7 +364,7 @@ private suspend fun PointerInputScope.modelPaintGestures(state: AppState) {
                 state.previewRy += pan.x * 0.012f
                 state.previewRx = (state.previewRx + pan.y * 0.012f).coerceIn(-1.4f, 1.4f)
             } else if (!multi && pressed == 1) {
-                val pos = event.changes.first { it.pressed }.position
+                val pos = relevant.first { it.pressed }.position
                 when {
                     lining -> previewLine(pos)
                     state.tool == Tool.FILL || state.tool == Tool.EYEDROPPER -> {}
@@ -364,7 +372,7 @@ private suspend fun PointerInputScope.modelPaintGestures(state: AppState) {
                 }
             }
             event.changes.forEach { if (it.positionChanged()) it.consume() }
-        } while (event.changes.any { it.pressed })
+        } while (event.relevant(state.stylusOnly).any { it.pressed })
 
         if (changed) {
             state.touched()
