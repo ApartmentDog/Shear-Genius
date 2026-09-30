@@ -348,9 +348,11 @@ private suspend fun PointerInputScope.modelPaintGestures(state: AppState) {
 
         do {
             val event = awaitPointerEvent()
+            val fingerCount = event.changes.count { it.pressed && it.type == androidx.compose.ui.input.pointer.PointerType.Touch }
+            val zoomPressed = if (state.stylusOnly) fingerCount else event.changes.count { it.pressed }
             val relevant = event.relevant(state.stylusOnly)
             val pressed = relevant.count { it.pressed }
-            if (pressed >= 2) {
+            if (zoomPressed >= 2) {
                 if (!multi) {
                     multi = true
                     if (changed) {
@@ -372,7 +374,7 @@ private suspend fun PointerInputScope.modelPaintGestures(state: AppState) {
                 }
             }
             event.changes.forEach { if (it.positionChanged()) it.consume() }
-        } while (event.relevant(state.stylusOnly).any { it.pressed })
+        } while (event.changes.any { it.pressed })
 
         if (changed) {
             state.touched()
