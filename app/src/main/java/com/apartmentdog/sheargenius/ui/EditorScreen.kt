@@ -178,15 +178,32 @@ fun EditorScreen(state: AppState) {
             ToolSlot(state, Tool.SHADE, PixelIcons.Shade)
             ToolSlot(state, Tool.SELECT, PixelIcons.Select)
             ToolSlot(state, Tool.MOVE, PixelIcons.Move)
-            Slot(size = 36.dp, selected = state.mirror, onClick = { state.mirror = !state.mirror }) {
-                PixelIconView(PixelIcons.Mirror, Blocky.IconDark, Modifier.size(20.dp))
-            }
-            Slot(size = 36.dp, selected = state.stylusOnly, onClick = { state.toggleStylusOnly() }) {
-                PixelIconView(PixelIcons.Stylus, Blocky.IconDark, Modifier.size(20.dp))
-            }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-            PixelText(TOOL_NAMES[state.tool] ?: "", 12.sp)
+            Box(
+                Modifier
+                    .bevel(Blocky.IconDark.copy(alpha = 0.85f), Color.Transparent, Color.Transparent, 0.dp, null)
+                    .padding(horizontal = 10.dp, vertical = 3.dp)
+            ) {
+                PixelText(TOOL_NAMES[state.tool] ?: "", 12.sp, Color.White)
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+        ) {
+            BlockButton(
+                onClick = { state.mirror = !state.mirror },
+                icon = PixelIcons.Mirror,
+                label = "Mirror",
+                selected = state.mirror
+            )
+            BlockButton(
+                onClick = { state.toggleStylusOnly() },
+                icon = PixelIcons.Stylus,
+                label = "Stylus",
+                selected = state.stylusOnly
+            )
         }
 
         val activeName = state.layers.getOrNull(state.activeLayer)?.let { if (it.visible) it.name else it.name + " (hidden)" } ?: ""
