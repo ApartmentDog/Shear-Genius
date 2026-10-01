@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -41,7 +42,7 @@ fun LayersDialog(state: AppState, onDismiss: () -> Unit) {
     val active = state.activeLayer
 
     Dialog(onDismissRequest = onDismiss) {
-        Panel(Modifier.width(320.dp)) {
+        Panel(Modifier.widthIn(max = 340.dp).fillMaxWidth(0.9f)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 PixelText("Layers", 16.sp)
                 PixelText("${state.layers.size}/$MAX_LAYERS", 12.sp)

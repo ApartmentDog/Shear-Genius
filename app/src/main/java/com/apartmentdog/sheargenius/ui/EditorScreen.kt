@@ -62,6 +62,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import com.apartmentdog.sheargenius.AppState
 import com.apartmentdog.sheargenius.SelRect
 import com.apartmentdog.sheargenius.ShadeMode
@@ -167,7 +169,9 @@ fun EditorScreen(state: AppState) {
         }
 
         Row(
-            Modifier.fillMaxWidth(),
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally)
         ) {
             ToolSlot(state, Tool.PENCIL, PixelIcons.Pencil)

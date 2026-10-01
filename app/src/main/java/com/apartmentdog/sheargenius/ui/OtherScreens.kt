@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -150,14 +151,21 @@ fun FilesScreen(state: AppState) {
         Panel(Modifier.fillMaxWidth()) {
             PixelText("Projects", 16.sp)
             Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BlockButton(onClick = {
-                    state.createProject()
-                    state.screen = Screen.EDITOR
-                }, icon = PixelIcons.Plus, label = "New")
-                BlockButton(onClick = { opener.launch(arrayOf("image/png")) }, icon = PixelIcons.Photo, label = "Import")
-                BlockButton(onClick = { showPlayer = true }, label = "Player")
-                BlockButton(onClick = { state.startOnboarding() }, label = "Tour")
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BlockButton(
+                        onClick = { state.createProject(); state.screen = Screen.EDITOR },
+                        icon = PixelIcons.Plus, label = "New", modifier = Modifier.weight(1f)
+                    )
+                    BlockButton(
+                        onClick = { opener.launch(arrayOf("image/png")) },
+                        icon = PixelIcons.Photo, label = "Import", modifier = Modifier.weight(1f)
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BlockButton(onClick = { showPlayer = true }, label = "Player", modifier = Modifier.weight(1f))
+                    BlockButton(onClick = { state.startOnboarding() }, label = "Tour", modifier = Modifier.weight(1f))
+                }
             }
             Spacer(Modifier.height(12.dp))
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -183,7 +191,7 @@ fun FilesScreen(state: AppState) {
 
     menuFor?.let { p ->
         Dialog(onDismissRequest = { menuFor = null }) {
-            Panel(Modifier.width(280.dp)) {
+            Panel(Modifier.widthIn(max = 300.dp).fillMaxWidth(0.9f)) {
                 PixelText(p.name, 16.sp, maxLines = 1)
                 Spacer(Modifier.height(12.dp))
                 BlockButton(onClick = {
@@ -204,7 +212,7 @@ fun FilesScreen(state: AppState) {
     renameFor?.let { p ->
         var text by remember(p.id) { mutableStateOf(p.name) }
         Dialog(onDismissRequest = { renameFor = null }) {
-            Panel(Modifier.width(300.dp)) {
+            Panel(Modifier.widthIn(max = 320.dp).fillMaxWidth(0.9f)) {
                 PixelText("Rename project", 16.sp)
                 Spacer(Modifier.height(10.dp))
                 BasicTextField(
@@ -355,7 +363,7 @@ private fun PlayerSkinDialog(state: AppState, onDone: () -> Unit, onDismiss: () 
     }
 
     Dialog(onDismissRequest = { if (!busy) onDismiss() }) {
-        Panel(Modifier.width(300.dp)) {
+        Panel(Modifier.widthIn(max = 320.dp).fillMaxWidth(0.9f)) {
             PixelText("Download a player's skin", 16.sp)
             Spacer(Modifier.height(4.dp))
             PixelText("Java Edition username. It opens as a new project.", 12.sp)

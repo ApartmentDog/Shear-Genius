@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -57,7 +58,7 @@ fun OnboardingDialog(state: AppState) {
     val s = STEPS[step]
 
     Dialog(onDismissRequest = { state.dismissOnboarding() }) {
-        Panel(Modifier.width(320.dp)) {
+        Panel(Modifier.widthIn(max = 340.dp).fillMaxWidth(0.9f)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 PixelText("What's where", 16.sp)
                 BlockButton(onClick = { state.dismissOnboarding() }, label = "Skip")

@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -99,7 +101,9 @@ fun PreviewScreen(state: AppState) {
             Spacer(Modifier.height(6.dp))
             if (state.paintOnModel) {
                 Row(
-                    Modifier.fillMaxWidth(),
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)
                 ) {
                     listOf(
@@ -186,7 +190,11 @@ fun PreviewScreen(state: AppState) {
         Panel(Modifier.fillMaxWidth()) {
             PixelText("Background", 14.sp)
             Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 PREVIEW_BACKGROUNDS.forEachIndexed { i, (_, argb) ->
                     Slot(size = 40.dp, selected = i == bgIndex, onClick = { state.changePreviewBg(i) }) {
                         Box(Modifier.size(26.dp).background(Color(argb)))

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -42,7 +43,7 @@ fun ColorDialog(initial: Int, onDismiss: () -> Unit, onApply: (Int) -> Unit, onS
     }
 
     Dialog(onDismissRequest = onDismiss) {
-        Panel(Modifier.width(320.dp)) {
+        Panel(Modifier.widthIn(max = 340.dp).fillMaxWidth(0.9f)) {
             PixelText("Color", 18.sp)
             Spacer(Modifier.height(10.dp))
             Box(Modifier.fillMaxWidth().height(48.dp).insetFrame().background(Color(current)))
