@@ -356,29 +356,55 @@ private suspend fun PointerInputScope.modelPaintGestures(state: AppState) {
 
         do {
             val event = awaitPointerEvent()
-            val fingerCount = event.changes.count { it.pressed && it.type == androidx.compose.ui.input.pointer.PointerType.Touch }
-            val zoomPressed = if (state.stylusOnly) fingerCount else event.changes.count { it.pressed }
-            val relevant = event.relevant(state.stylusOnly)
-            val pressed = relevant.count { it.pressed }
-            if (zoomPressed >= 2) {
-                if (!multi) {
-                    multi = true
-                    if (changed) {
-                        state.restore(before)
-                        changed = false
+            // Two clearly separate paths: when Stylus mode is off, this is byte-for-byte
+            // the original finger/stylus-agnostic logic, touched by nothing added below.
+            if (!state.stylusOnly) {
+                val pressed = event.changes.count { it.pressed }
+                if (pressed >= 2) {
+                    if (!multi) {
+                        multi = true
+                        if (changed) {
+                            state.restore(before)
+                            changed = false
+                        }
+                    }
+                    val zoom = event.calculateZoom()
+                    val pan = event.calculatePan()
+                    state.previewZoom = (state.previewZoom * zoom).coerceIn(0.5f, 3f)
+                    state.previewRy += pan.x * 0.012f
+                    state.previewRx = (state.previewRx + pan.y * 0.012f).coerceIn(-1.4f, 1.4f)
+                } else if (!multi && pressed == 1) {
+                    val pos = event.changes.first { it.pressed }.position
+                    when {
+                        lining -> previewLine(pos)
+                        state.tool == Tool.FILL || state.tool == Tool.EYEDROPPER -> {}
+                        else -> strokeTo(pos)
                     }
                 }
-                val zoom = event.calculateZoom()
-                val pan = event.calculatePan()
-                state.previewZoom = (state.previewZoom * zoom).coerceIn(0.5f, 3f)
-                state.previewRy += pan.x * 0.012f
-                state.previewRx = (state.previewRx + pan.y * 0.012f).coerceIn(-1.4f, 1.4f)
-            } else if (!multi && pressed == 1) {
-                val pos = relevant.first { it.pressed }.position
-                when {
-                    lining -> previewLine(pos)
-                    state.tool == Tool.FILL || state.tool == Tool.EYEDROPPER -> {}
-                    else -> strokeTo(pos)
+            } else {
+                val fingerCount = event.changes.count { it.pressed && it.type == androidx.compose.ui.input.pointer.PointerType.Touch }
+                val relevant = event.changes.filter { it.type == androidx.compose.ui.input.pointer.PointerType.Stylus }
+                val pressed = relevant.count { it.pressed }
+                if (fingerCount >= 2) {
+                    if (!multi) {
+                        multi = true
+                        if (changed) {
+                            state.restore(before)
+                            changed = false
+                        }
+                    }
+                    val zoom = event.calculateZoom()
+                    val pan = event.calculatePan()
+                    state.previewZoom = (state.previewZoom * zoom).coerceIn(0.5f, 3f)
+                    state.previewRy += pan.x * 0.012f
+                    state.previewRx = (state.previewRx + pan.y * 0.012f).coerceIn(-1.4f, 1.4f)
+                } else if (!multi && pressed == 1) {
+                    val pos = relevant.first { it.pressed }.position
+                    when {
+                        lining -> previewLine(pos)
+                        state.tool == Tool.FILL || state.tool == Tool.EYEDROPPER -> {}
+                        else -> strokeTo(pos)
+                    }
                 }
             }
             event.changes.forEach { if (it.positionChanged()) it.consume() }

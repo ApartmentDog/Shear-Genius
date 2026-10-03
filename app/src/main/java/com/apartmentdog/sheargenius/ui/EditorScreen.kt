@@ -498,9 +498,6 @@ suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.awaitReleva
     }
 }
 
-fun androidx.compose.ui.input.pointer.PointerEvent.relevant(stylusOnly: Boolean) =
-    if (stylusOnly) changes.filter { it.type == PointerType.Stylus } else changes
-
 private suspend fun PointerInputScope.editorGestures(
     state: AppState,
     scale: MutableFloatState,
@@ -584,53 +581,103 @@ private suspend fun PointerInputScope.editorGestures(
 
         do {
             val event = awaitPointerEvent()
-            val fingerCount = event.changes.count { it.pressed && it.type == PointerType.Touch }
-            val zoomPressed = if (state.stylusOnly) fingerCount else event.changes.count { it.pressed }
-            val relevant = event.relevant(state.stylusOnly)
-            val pressed = relevant.count { it.pressed }
-            if (zoomPressed >= 2) {
-                if (!multi) {
-                    multi = true
-                    if (changed) {
-                        state.restore(before)
-                        changed = false
+            // Two clearly separate paths: when Stylus mode is off, this is byte-for-byte
+            // the original finger/stylus-agnostic logic, touched by nothing added below.
+            if (!state.stylusOnly) {
+                val pressed = event.changes.count { it.pressed }
+                if (pressed >= 2) {
+                    if (!multi) {
+                        multi = true
+                        if (changed) {
+                            state.restore(before)
+                            changed = false
+                        }
+                        visited.clear()
                     }
-                    visited.clear()
-                }
-                val zoom = event.calculateZoom()
-                val pan = event.calculatePan()
-                val centroid = event.calculateCentroid(useCurrent = true)
-                val old = scale.floatValue
-                val ns = (old * zoom).coerceIn(1f, 12f)
-                var no = (offset.value - centroid) * (ns / old) + centroid + pan
-                val full = size.width * ns
-                no = Offset(
-                    no.x.coerceIn(size.width - full, 0f),
-                    no.y.coerceIn(size.height - full, 0f)
-                )
-                scale.floatValue = ns
-                offset.value = no
-            } else if (!multi && pressed == 1) {
-                if (moveArmed && moveStart != null && moveOriginal != null) {
-                    moveDelta = screenDelta(relevant.first { it.pressed }.position)
-                    state.previewMove(moveOriginal, moveStart, moveDelta.x, moveDelta.y)
-                } else if (marqueeOrigin != null) {
-                    val cur = clampSkin(relevant.first { it.pressed }.position)
-                    marquee.value = SelRect(
-                        minOf(marqueeOrigin.x, cur.x), minOf(marqueeOrigin.y, cur.y),
-                        maxOf(marqueeOrigin.x, cur.x), maxOf(marqueeOrigin.y, cur.y)
-                    )
-                } else if (moving) {
+                    val zoom = event.calculateZoom()
                     val pan = event.calculatePan()
-                    val full = size.width * scale.floatValue
-                    val no = offset.value + pan
-                    offset.value = Offset(
+                    val centroid = event.calculateCentroid(useCurrent = true)
+                    val old = scale.floatValue
+                    val ns = (old * zoom).coerceIn(1f, 12f)
+                    var no = (offset.value - centroid) * (ns / old) + centroid + pan
+                    val full = size.width * ns
+                    no = Offset(
                         no.x.coerceIn(size.width - full, 0f),
                         no.y.coerceIn(size.height - full, 0f)
                     )
-                } else {
-                    val pos = relevant.first { it.pressed }.position
-                    if (pen) stroke(pos) else if (lineStart != null) previewLine(pos)
+                    scale.floatValue = ns
+                    offset.value = no
+                } else if (!multi && pressed == 1) {
+                    if (moveArmed && moveStart != null && moveOriginal != null) {
+                        moveDelta = screenDelta(event.changes.first { it.pressed }.position)
+                        state.previewMove(moveOriginal, moveStart, moveDelta.x, moveDelta.y)
+                    } else if (marqueeOrigin != null) {
+                        val cur = clampSkin(event.changes.first { it.pressed }.position)
+                        marquee.value = SelRect(
+                            minOf(marqueeOrigin.x, cur.x), minOf(marqueeOrigin.y, cur.y),
+                            maxOf(marqueeOrigin.x, cur.x), maxOf(marqueeOrigin.y, cur.y)
+                        )
+                    } else if (moving) {
+                        val pan = event.calculatePan()
+                        val full = size.width * scale.floatValue
+                        val no = offset.value + pan
+                        offset.value = Offset(
+                            no.x.coerceIn(size.width - full, 0f),
+                            no.y.coerceIn(size.height - full, 0f)
+                        )
+                    } else {
+                        val pos = event.changes.first { it.pressed }.position
+                        if (pen) stroke(pos) else if (lineStart != null) previewLine(pos)
+                    }
+                }
+            } else {
+                val fingerCount = event.changes.count { it.pressed && it.type == PointerType.Touch }
+                val relevant = event.changes.filter { it.type == PointerType.Stylus }
+                val pressed = relevant.count { it.pressed }
+                if (fingerCount >= 2) {
+                    if (!multi) {
+                        multi = true
+                        if (changed) {
+                            state.restore(before)
+                            changed = false
+                        }
+                        visited.clear()
+                    }
+                    val zoom = event.calculateZoom()
+                    val pan = event.calculatePan()
+                    val centroid = event.calculateCentroid(useCurrent = true)
+                    val old = scale.floatValue
+                    val ns = (old * zoom).coerceIn(1f, 12f)
+                    var no = (offset.value - centroid) * (ns / old) + centroid + pan
+                    val full = size.width * ns
+                    no = Offset(
+                        no.x.coerceIn(size.width - full, 0f),
+                        no.y.coerceIn(size.height - full, 0f)
+                    )
+                    scale.floatValue = ns
+                    offset.value = no
+                } else if (!multi && pressed == 1) {
+                    if (moveArmed && moveStart != null && moveOriginal != null) {
+                        moveDelta = screenDelta(relevant.first { it.pressed }.position)
+                        state.previewMove(moveOriginal, moveStart, moveDelta.x, moveDelta.y)
+                    } else if (marqueeOrigin != null) {
+                        val cur = clampSkin(relevant.first { it.pressed }.position)
+                        marquee.value = SelRect(
+                            minOf(marqueeOrigin.x, cur.x), minOf(marqueeOrigin.y, cur.y),
+                            maxOf(marqueeOrigin.x, cur.x), maxOf(marqueeOrigin.y, cur.y)
+                        )
+                    } else if (moving) {
+                        val pan = event.calculatePan()
+                        val full = size.width * scale.floatValue
+                        val no = offset.value + pan
+                        offset.value = Offset(
+                            no.x.coerceIn(size.width - full, 0f),
+                            no.y.coerceIn(size.height - full, 0f)
+                        )
+                    } else {
+                        val pos = relevant.first { it.pressed }.position
+                        if (pen) stroke(pos) else if (lineStart != null) previewLine(pos)
+                    }
                 }
             }
             event.changes.forEach { if (it.positionChanged()) it.consume() }
