@@ -597,9 +597,10 @@ private suspend fun PointerInputScope.editorGestures(
                     val zoom = event.calculateZoom()
                     val pan = event.calculatePan()
                     val centroid = event.calculateCentroid(useCurrent = true)
+                    val source = centroid - pan
                     val old = scale.floatValue
                     val ns = (old * zoom).coerceIn(1f, 12f)
-                    var no = (offset.value - centroid) * (ns / old) + centroid + pan
+                    var no = (offset.value - source) * (ns / old) + centroid
                     val full = size.width * ns
                     no = Offset(
                         no.x.coerceIn(size.width - full, 0f),
@@ -646,9 +647,10 @@ private suspend fun PointerInputScope.editorGestures(
                     val zoom = event.calculateZoom()
                     val pan = event.calculatePan()
                     val centroid = event.calculateCentroid(useCurrent = true)
+                    val source = centroid - pan
                     val old = scale.floatValue
                     val ns = (old * zoom).coerceIn(1f, 12f)
-                    var no = (offset.value - centroid) * (ns / old) + centroid + pan
+                    var no = (offset.value - source) * (ns / old) + centroid
                     val full = size.width * ns
                     no = Offset(
                         no.x.coerceIn(size.width - full, 0f),
