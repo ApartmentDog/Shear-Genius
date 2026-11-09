@@ -72,3 +72,4 @@ Every push to `main` builds a release APK and publishes it as a GitHub release n
 ## License
 
 No license has been chosen yet, so all rights are reserved by default. The bundled Pixelify Sans font is under the SIL Open Font License (see `app/src/main/assets/fonts/OFL.txt`).
+
