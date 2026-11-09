@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.apartmentdog.sheargenius.model.PixelOps
 import com.apartmentdog.sheargenius.model.SkinBox
 import com.apartmentdog.sheargenius.model.SkinLayout
 import org.json.JSONArray
@@ -273,26 +274,7 @@ class AppState(private val context: Context) {
 
     private fun flood(start: Int, c: Int): Boolean {
         if (!isEditable(start)) return false
-        val target = pixels[start]
-        if (target == c) return false
-        val map = regionMap
-        val region = map[start]
-        val stack = ArrayDeque<Int>()
-        stack.addLast(start)
-        var changed = false
-        while (stack.isNotEmpty()) {
-            val i = stack.removeLast()
-            if (pixels[i] != target || map[i] != region) continue
-            pixels[i] = c
-            changed = true
-            val x = i % SkinLayout.SIZE
-            val y = i / SkinLayout.SIZE
-            if (x > 0) stack.addLast(i - 1)
-            if (x < SkinLayout.SIZE - 1) stack.addLast(i + 1)
-            if (y > 0) stack.addLast(i - SkinLayout.SIZE)
-            if (y < SkinLayout.SIZE - 1) stack.addLast(i + SkinLayout.SIZE)
-        }
-        return changed
+        return PixelOps.floodFill(pixels, regionMap, start, c)
     }
 
     fun pick(i: Int) {
@@ -336,35 +318,9 @@ class AppState(private val context: Context) {
     }
 
     /** Visible layers flattened bottom to top with normal alpha blending. */
-    fun composite(): IntArray {
-        val out = IntArray(SkinLayout.COUNT)
-        for (layer in layers) {
-            if (!layer.visible) continue
-            val src = layer.pixels
-            for (i in 0 until SkinLayout.COUNT) {
-                val s = src[i]
-                if ((s ushr 24) == 0) continue
-                out[i] = blendOver(s, out[i])
-            }
-        }
-        return out
-    }
+    fun composite(): IntArray = PixelOps.composite(layers.map { it.pixels to it.visible })
 
-    /** Source-over blend of [s] atop [d], both ARGB. */
-    private fun blendOver(s: Int, d: Int): Int {
-        val sa = s ushr 24
-        if (sa == 255 || (d ushr 24) == 0) return s
-        if (sa == 0) return d
-        val da = d ushr 24
-        val outA = sa + da * (255 - sa) / 255
-        if (outA == 0) return 0
-        fun ch(shift: Int): Int {
-            val sc = (s shr shift) and 0xFF
-            val dc = (d shr shift) and 0xFF
-            return ((sc * sa + dc * da * (255 - sa) / 255) / outA).coerceIn(0, 255)
-        }
-        return (outA shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
-    }
+    private fun blendOver(s: Int, d: Int): Int = PixelOps.blendOver(s, d)
 
     // ---- selection
 
@@ -552,26 +508,7 @@ class AppState(private val context: Context) {
         push(snapshot())
         val top = layers[activeLayer]
         val below = layers[activeLayer - 1]
-        val merged = below.pixels.copyOf()
-        if (top.visible) {
-            for (i in 0 until SkinLayout.COUNT) {
-                val s = top.pixels[i]
-                val sa = s ushr 24
-                if (sa == 0) continue
-                if (sa == 255 || (merged[i] ushr 24) == 0) merged[i] = s
-                else {
-                    val d = merged[i]
-                    val da = d ushr 24
-                    val outA = sa + da * (255 - sa) / 255
-                    fun ch(shift: Int): Int {
-                        val sc = (s shr shift) and 0xFF
-                        val dc = (d shr shift) and 0xFF
-                        return ((sc * sa + dc * da * (255 - sa) / 255) / outA).coerceIn(0, 255)
-                    }
-                    merged[i] = (outA shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
-                }
-            }
-        }
+        val merged = if (top.visible) PixelOps.mergeOnto(below.pixels, top.pixels) else below.pixels.copyOf()
         layers[activeLayer - 1] = below.copy(pixels = merged)
         layers.removeAt(activeLayer)
         activeLayer -= 1
