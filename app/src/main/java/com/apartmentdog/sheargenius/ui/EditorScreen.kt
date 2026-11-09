@@ -64,6 +64,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.runtime.key
+import androidx.compose.ui.unit.Dp
 import com.apartmentdog.sheargenius.AppState
 import com.apartmentdog.sheargenius.SelRect
 import com.apartmentdog.sheargenius.ShadeMode
@@ -95,60 +103,51 @@ fun EditorScreen(state: AppState) {
         offset.value = Offset(no.x.coerceIn(s - s * ns, 0f), no.y.coerceIn(s - s * ns, 0f))
     }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(11.dp)
-    ) {
-        Panel(Modifier.fillMaxWidth()) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BlockButton(
-                        onClick = { requestModel(state, false) { pendingSlim = it } },
-                        label = "Steve",
-                        selected = !state.slim
-                    )
-                    BlockButton(
-                        onClick = { requestModel(state, true) { pendingSlim = it } },
-                        label = "Alex",
-                        selected = state.slim
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BlockButton(
-                        onClick = { state.overlayVisible = !state.overlayVisible },
-                        label = "Overlay",
-                        selected = state.overlayVisible
-                    )
-                    BlockButton(onClick = { state.toggleLabels() }, label = "Labels", selected = state.showLabels)
-                }
+    var sheet by remember { mutableStateOf<EditorSheet?>(null) }
+
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            // Zoom, current tool, and view settings
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BlockButton(onClick = { zoomBy(1f / 1.5f) }, icon = PixelIcons.Minus, enabled = scale.floatValue > 1f)
+                PixelText(
+                    "${(scale.floatValue * 100).roundToInt()}%",
+                    14.sp,
+                    modifier = Modifier.widthIn(min = 44.dp),
+                    textAlign = TextAlign.Center
+                )
+                BlockButton(onClick = { zoomBy(1.5f) }, icon = PixelIcons.Plus, enabled = scale.floatValue < 12f)
+                BlockButton(onClick = {
+                    scale.floatValue = 1f
+                    offset.value = Offset.Zero
+                }, label = "Fit")
+                PixelText(
+                    TOOL_NAMES[state.tool] ?: "",
+                    12.sp,
+                    Color.White,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    textAlign = TextAlign.Center,
+                    shadow = true
+                )
+                BlockButton(onClick = { sheet = EditorSheet.VIEW }, icon = PixelIcons.Eye, label = "View")
             }
-            Spacer(Modifier.height(10.dp))
-            SkinCanvas(state, scale, offset, canvasPx, Modifier.fillMaxWidth().aspectRatio(1f))
-            Spacer(Modifier.height(10.dp))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    BlockButton(onClick = { zoomBy(1f / 1.5f) }, icon = PixelIcons.Minus, enabled = scale.floatValue > 1f)
-                    PixelText(
-                        "${(scale.floatValue * 100).roundToInt()}%",
-                        14.sp,
-                        modifier = Modifier.widthIn(min = 48.dp),
-                        textAlign = TextAlign.Center
-                    )
-                    BlockButton(onClick = { zoomBy(1.5f) }, icon = PixelIcons.Plus, enabled = scale.floatValue < 12f)
-                    BlockButton(onClick = {
-                        scale.floatValue = 1f
-                        offset.value = Offset.Zero
-                    }, label = "Fit")
-                }
-                Spacer(Modifier.weight(1f))
-                BlockButton(onClick = { state.toggleMiniPreview() }, label = "3D", selected = state.miniPreview)
-            }
-            if (state.miniPreview) {
-                Spacer(Modifier.height(10.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+
+            // Canvas: the largest square that fits the free space
+            BoxWithConstraints(
+                Modifier.weight(1f).fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                val side = if (maxWidth < maxHeight) maxWidth else maxHeight
+                SkinCanvas(state, scale, offset, canvasPx, Modifier.size(side))
+                if (state.miniPreview) {
                     SkinModelView(
                         state = state,
                         rx = 0.15f,
@@ -157,108 +156,155 @@ fun EditorScreen(state: AppState) {
                         showOverlay = true,
                         background = PREVIEW_BACKGROUNDS[state.previewBg.coerceIn(0, PREVIEW_BACKGROUNDS.lastIndex)].second,
                         modifier = Modifier
-                            .size(104.dp)
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .size(88.dp)
                             .insetFrame()
                             .clipToBounds()
                             .clickable { state.screen = Screen.PREVIEW }
                     )
-                    Spacer(Modifier.width(12.dp))
-                    PixelText("Tap the model for the full preview", 12.sp, modifier = Modifier.weight(1f))
                 }
             }
-        }
 
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally)
-        ) {
-            ToolSlot(state, Tool.PENCIL, PixelIcons.Pencil)
-            ToolSlot(state, Tool.ERASER, PixelIcons.Eraser)
-            ToolSlot(state, Tool.LINE, PixelIcons.Line)
-            ToolSlot(state, Tool.FILL, PixelIcons.Bucket)
-            ToolSlot(state, Tool.EYEDROPPER, PixelIcons.Dropper)
-            ToolSlot(state, Tool.SHADE, PixelIcons.Shade)
-            ToolSlot(state, Tool.SELECT, PixelIcons.Select)
-            ToolSlot(state, Tool.MOVE, PixelIcons.Move)
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-            Box(
-                Modifier
-                    .bevel(Blocky.IconDark.copy(alpha = 0.85f), Color.Transparent, Color.Transparent, 0.dp, null)
-                    .padding(horizontal = 10.dp, vertical = 3.dp)
+            // Tools: all eight always visible, sized to the screen width
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val gap = 4.dp
+                val slot = ((maxWidth - gap * 7) / 8).coerceIn(36.dp, 56.dp)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally)
+                ) {
+                    ToolSlot(state, Tool.PENCIL, PixelIcons.Pencil, slot)
+                    ToolSlot(state, Tool.ERASER, PixelIcons.Eraser, slot)
+                    ToolSlot(state, Tool.LINE, PixelIcons.Line, slot)
+                    ToolSlot(state, Tool.FILL, PixelIcons.Bucket, slot)
+                    ToolSlot(state, Tool.EYEDROPPER, PixelIcons.Dropper, slot)
+                    ToolSlot(state, Tool.SHADE, PixelIcons.Shade, slot)
+                    ToolSlot(state, Tool.SELECT, PixelIcons.Select, slot)
+                    ToolSlot(state, Tool.MOVE, PixelIcons.Move, slot)
+                }
+            }
+
+            // Current color, palette strip, full palette
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                PixelText(TOOL_NAMES[state.tool] ?: "", 12.sp, Color.White)
+                Slot(size = 48.dp, onClick = { showColor = true }) {
+                    Box(Modifier.size(30.dp).background(Color(state.color)))
+                }
+                Row(
+                    Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    state.palette.forEach { c ->
+                        key(c) {
+                            Slot(size = 44.dp, selected = c == state.color, onClick = { state.color = c }) {
+                                Box(Modifier.size(28.dp).background(Color(c)))
+                            }
+                        }
+                    }
+                }
+                BlockButton(onClick = { sheet = EditorSheet.PALETTE }, label = "Palette")
+            }
+
+            // Mirror, layers, and options for the current tool
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BlockButton(
+                    onClick = { state.mirror = !state.mirror },
+                    icon = PixelIcons.Mirror,
+                    label = "Mirror",
+                    selected = state.mirror
+                )
+                val layer = state.layers.getOrNull(state.activeLayer)
+                val layerName = layer?.let { if (it.visible) it.name else it.name + " (hidden)" } ?: ""
+                BlockButton(
+                    onClick = { showLayers = true },
+                    icon = PixelIcons.Layers,
+                    label = layerName,
+                    modifier = Modifier.weight(1f)
+                )
+                when (state.tool) {
+                    Tool.SHADE -> BlockButton(onClick = { sheet = EditorSheet.TOOL }, label = "Shade")
+                    Tool.SELECT -> BlockButton(
+                        onClick = { sheet = EditorSheet.TOOL },
+                        label = state.selection?.let { "${it.w}\u00d7${it.h}" } ?: "Select"
+                    )
+                    else -> {}
+                }
             }
         }
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-        ) {
-            BlockButton(
-                onClick = { state.mirror = !state.mirror },
-                icon = PixelIcons.Mirror,
-                label = "Mirror",
-                selected = state.mirror
-            )
-            BlockButton(
-                onClick = { state.toggleStylusOnly() },
-                icon = PixelIcons.Stylus,
-                label = "Stylus",
-                selected = state.stylusOnly
-            )
-        }
 
-        val activeName = state.layers.getOrNull(state.activeLayer)?.let { if (it.visible) it.name else it.name + " (hidden)" } ?: ""
-        BlockButton(
-            onClick = { showLayers = true },
-            icon = PixelIcons.Layers,
-            label = "Layer: $activeName",
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        if (state.tool == Tool.SHADE) {
-            ShadeControls(state)
-        }
-
-        if (state.tool == Tool.SELECT) {
-            Panel(Modifier.fillMaxWidth()) {
-                val sel = state.selection
-                PixelText(
-                    if (sel != null) "Selection: ${sel.w}\u00d7${sel.h}" else "Drag on the canvas to select a rectangle",
-                    13.sp
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    BlockButton(onClick = { state.copySelection() }, label = "Copy", enabled = sel != null, modifier = Modifier.weight(1f))
-                    BlockButton(onClick = { state.pasteSelection() }, label = "Paste", enabled = state.hasClipboard, modifier = Modifier.weight(1f))
-                    BlockButton(onClick = { state.deleteSelection() }, label = "Delete", enabled = sel != null, modifier = Modifier.weight(1f))
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    BlockButton(onClick = { state.flipSelection(true) }, label = "Flip H", enabled = sel != null, modifier = Modifier.weight(1f))
-                    BlockButton(onClick = { state.flipSelection(false) }, label = "Flip V", enabled = sel != null, modifier = Modifier.weight(1f))
+        when (sheet) {
+            EditorSheet.VIEW -> PullUpPanel("View", onDismiss = { sheet = null }) {
+                PixelText("Model", 13.sp)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     BlockButton(
-                        onClick = { state.armMove() },
-                        label = "Move",
-                        selected = state.selectMoveArmed,
-                        enabled = sel != null,
+                        onClick = { requestModel(state, false) { pendingSlim = it } },
+                        label = "Steve",
+                        selected = !state.slim,
+                        modifier = Modifier.weight(1f)
+                    )
+                    BlockButton(
+                        onClick = { requestModel(state, true) { pendingSlim = it } },
+                        label = "Alex",
+                        selected = state.slim,
                         modifier = Modifier.weight(1f)
                     )
                 }
-                if (sel != null) {
-                    Spacer(Modifier.height(8.dp))
-                    BlockButton(onClick = { state.clearSelection() }, label = "Deselect", modifier = Modifier.fillMaxWidth())
+                PixelText("Canvas", 13.sp)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BlockButton(
+                        onClick = { state.overlayVisible = !state.overlayVisible },
+                        label = "Overlay",
+                        selected = state.overlayVisible,
+                        modifier = Modifier.weight(1f)
+                    )
+                    BlockButton(
+                        onClick = { state.toggleLabels() },
+                        label = "Labels",
+                        selected = state.showLabels,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
-                if (state.selectMoveArmed) {
-                    Spacer(Modifier.height(6.dp))
-                    PixelText("Drag anywhere on the canvas to move it.", 11.sp)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BlockButton(
+                        onClick = { state.toggleMiniPreview() },
+                        icon = PixelIcons.Cube,
+                        label = "3D corner",
+                        selected = state.miniPreview,
+                        modifier = Modifier.weight(1f)
+                    )
+                    BlockButton(
+                        onClick = { state.toggleStylusOnly() },
+                        icon = PixelIcons.Stylus,
+                        label = "Stylus only",
+                        selected = state.stylusOnly,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
+            EditorSheet.PALETTE -> PullUpPanel("Colors", onDismiss = { sheet = null }) {
+                ColorPanel(state, onEditColor = { showColor = true })
+                PixelText("Long-press a palette color to remove it.", 11.sp)
+            }
+            EditorSheet.TOOL -> PullUpPanel(
+                if (state.tool == Tool.SELECT) "Selection" else "Shade",
+                onDismiss = { sheet = null }
+            ) {
+                if (state.tool == Tool.SELECT) {
+                    SelectControls(state, onMoveArmed = { sheet = null })
+                } else {
+                    ShadeControls(state)
+                }
+            }
+            null -> {}
         }
-
-        ColorPanel(state, onEditColor = { showColor = true })
     }
 
     val target = pendingSlim
@@ -305,16 +351,85 @@ private fun requestModel(state: AppState, slim: Boolean, ask: (Boolean) -> Unit)
 }
 
 @Composable
-private fun ToolSlot(state: AppState, tool: Tool, icon: PixelIcon) {
-    Slot(size = 36.dp, selected = state.tool == tool, onClick = { state.tool = tool }) {
-        PixelIconView(icon, Blocky.IconDark, Modifier.size(20.dp))
+private fun ToolSlot(state: AppState, tool: Tool, icon: PixelIcon, size: Dp) {
+    Slot(size = size, selected = state.tool == tool, onClick = { state.tool = tool }) {
+        PixelIconView(icon, Blocky.IconDark, Modifier.size(size * 0.55f))
+    }
+}
+
+private enum class EditorSheet { VIEW, PALETTE, TOOL }
+
+/** Panel that slides over the bottom of the editor. Tap outside, press Done, or press back to close. */
+@Composable
+private fun PullUpPanel(title: String, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    BackHandler(onBack = onDismiss)
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.45f))
+            .pointerInput(Unit) { detectTapGestures(onTap = { onDismiss() }) }
+    ) {
+        Panel(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .fillMaxHeight(0.7f)
+                .wrapContentHeight(Alignment.Bottom)
+                .pointerInput(Unit) { detectTapGestures(onTap = {}) }
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                PixelText(title, 16.sp, modifier = Modifier.weight(1f))
+                BlockButton(onClick = onDismiss, label = "Done")
+            }
+            Spacer(Modifier.height(8.dp))
+            Column(
+                Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                content = content
+            )
+        }
+    }
+}
+
+/** Copy, paste, delete, flip and move for the rectangular selection. */
+@Composable
+private fun SelectControls(state: AppState, onMoveArmed: () -> Unit) {
+    val sel = state.selection
+    PixelText(
+        if (sel != null) "Selection: ${sel.w}\u00d7${sel.h}" else "Close this panel and drag on the canvas to select a rectangle",
+        13.sp
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        BlockButton(onClick = { state.copySelection() }, label = "Copy", enabled = sel != null, modifier = Modifier.weight(1f))
+        BlockButton(onClick = { state.pasteSelection() }, label = "Paste", enabled = state.hasClipboard, modifier = Modifier.weight(1f))
+        BlockButton(onClick = { state.deleteSelection() }, label = "Delete", enabled = sel != null, modifier = Modifier.weight(1f))
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        BlockButton(onClick = { state.flipSelection(true) }, label = "Flip H", enabled = sel != null, modifier = Modifier.weight(1f))
+        BlockButton(onClick = { state.flipSelection(false) }, label = "Flip V", enabled = sel != null, modifier = Modifier.weight(1f))
+        BlockButton(
+            onClick = {
+                state.armMove()
+                onMoveArmed()
+            },
+            label = "Move",
+            selected = state.selectMoveArmed,
+            enabled = sel != null,
+            modifier = Modifier.weight(1f)
+        )
+    }
+    if (sel != null) {
+        BlockButton(onClick = { state.clearSelection() }, label = "Deselect", modifier = Modifier.fillMaxWidth())
+    }
+    if (state.selectMoveArmed) {
+        PixelText("Drag anywhere on the canvas to move it.", 11.sp)
     }
 }
 
 private val TOOL_NAMES = mapOf(
     Tool.PENCIL to "Pencil", Tool.ERASER to "Eraser", Tool.LINE to "Line",
     Tool.FILL to "Fill", Tool.EYEDROPPER to "Eyedropper", Tool.SHADE to "Shade",
-    Tool.SELECT to "Select", Tool.MOVE to "Move canvas (drag with one finger)"
+    Tool.SELECT to "Select", Tool.MOVE to "Move canvas"
 )
 
 private val ZONE_LABELS = mapOf(

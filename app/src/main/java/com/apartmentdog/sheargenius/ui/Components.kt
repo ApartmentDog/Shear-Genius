@@ -6,9 +6,11 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -50,8 +52,8 @@ fun BlockButton(
     val fg = if (enabled) Color.White else Blocky.Disabled
     Row(
         modifier = modifier
-            .heightIn(min = 38.dp)
-            .widthIn(min = 38.dp)
+            .heightIn(min = 44.dp)
+            .widthIn(min = 44.dp)
             .bevel(fill, light, dark, 2.dp)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 6.dp),
@@ -96,18 +98,24 @@ fun Slot(
 
 @Composable
 fun PaletteGrid(colors: List<Int>, selected: Int?, onPick: (Int) -> Unit, onRemove: (Int) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        colors.chunked(7).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                row.forEach { c ->
-                    key(c) {
-                        Slot(
-                            size = 36.dp,
-                            selected = c == selected,
-                            onClick = { onPick(c) },
-                            onLongClick = { onRemove(c) }
-                        ) {
-                            Box(Modifier.size(22.dp).background(Color(c)))
+    // As many 44dp swatches per row as fit, so they stay easy to hit on any width.
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val swatch = 44.dp
+        val gap = 4.dp
+        val perRow = ((maxWidth + gap) / (swatch + gap)).toInt().coerceAtLeast(1)
+        Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+            colors.chunked(perRow).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    row.forEach { c ->
+                        key(c) {
+                            Slot(
+                                size = swatch,
+                                selected = c == selected,
+                                onClick = { onPick(c) },
+                                onLongClick = { onRemove(c) }
+                            ) {
+                                Box(Modifier.size(28.dp).background(Color(c)))
+                            }
                         }
                     }
                 }
