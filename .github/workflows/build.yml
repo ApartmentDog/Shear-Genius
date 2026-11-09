@@ -52,6 +52,16 @@ jobs:
           msg=$(sed -e 's/%/%25/g' errors.txt | awk '{printf "%s%%0A", $0}')
           echo "::error title=Build errors::${msg}"
 
+      - name: Verify APK signature
+        shell: bash
+        run: |
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs app/build/outputs/apk/release/app-release.apk | tee sig.txt
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ] && grep -qi "Android Debug" sig.txt; then
+            echo "::error title=Wrong key::Release APK is signed with the debug key despite KEYSTORE_BASE64 being set."
+            exit 1
+          fi
+
       - name: Name APK
         run: cp app/build/outputs/apk/release/app-release.apk ShearGenius-${{ github.run_number }}.apk
 
