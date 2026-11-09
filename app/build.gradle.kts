@@ -5,10 +5,20 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Release signing comes from environment variables (CI) or a local, git-ignored
+// keystore.properties. If neither is present the release build falls back to the
+// debug key so it still builds and installs, but it is not a distributable signature.
 val ksProps = Properties().apply {
     val f = rootProject.file("keystore.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
+fun signingValue(env: String, prop: String): String? =
+    System.getenv(env)?.takeIf { it.isNotBlank() } ?: ksProps.getProperty(prop)
+val ksFile = signingValue("KEYSTORE_FILE", "storeFile")?.let { rootProject.file(it) }
+val hasReleaseKey = ksFile?.exists() == true &&
+    signingValue("KEYSTORE_PASSWORD", "storePassword") != null &&
+    signingValue("KEY_ALIAS", "keyAlias") != null &&
+    signingValue("KEY_PASSWORD", "keyPassword") != null
 val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
 
 android {
@@ -24,18 +34,21 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            storeFile = rootProject.file(ksProps.getProperty("storeFile", "release.keystore"))
-            storePassword = ksProps.getProperty("storePassword")
-            keyAlias = ksProps.getProperty("keyAlias")
-            keyPassword = ksProps.getProperty("keyPassword")
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = ksFile
+                storePassword = signingValue("KEYSTORE_PASSWORD", "storePassword")
+                keyAlias = signingValue("KEY_ALIAS", "keyAlias")
+                keyPassword = signingValue("KEY_PASSWORD", "keyPassword")
+            }
         }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (hasReleaseKey) signingConfigs.getByName("release")
+                            else signingConfigs.getByName("debug")
         }
     }
 
