@@ -8,6 +8,7 @@ A pixel-art Minecraft skin editor for Android, built with Kotlin and Jetpack Com
 - Shade modes: lighten, darken, shine, noise, noisy pen, dither
 - Up to 12 paint layers with per-layer visibility, and undo/redo
 - Mirror painting, classic/slim arm models, and overlay (second layer) toggle
+- Gestures: pinch to zoom, two-finger tap to undo, three-finger tap to redo, long-press to pick a color
 - Rectangular selection with copy/paste
 - Reference image screen with color sampling
 - 3D preview with spin, walk animation, and optional painting directly on the model

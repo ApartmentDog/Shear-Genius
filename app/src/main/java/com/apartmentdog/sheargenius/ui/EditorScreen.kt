@@ -72,6 +72,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.runtime.key
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.input.pointer.PointerEvent
 import com.apartmentdog.sheargenius.AppState
 import com.apartmentdog.sheargenius.SelRect
 import com.apartmentdog.sheargenius.ShadeMode
@@ -627,6 +628,13 @@ private suspend fun PointerInputScope.editorGestures(
         var last: IntOffset? = null
         val shading = state.tool == Tool.SHADE
         val visited = HashSet<Int>()
+        // For two-finger undo / three-finger redo taps
+        val scale0 = scale.floatValue
+        val offset0 = offset.value
+        var maxPressed = 1
+        var multiTravel = 0f
+        var multiZoom = 1f
+        var lastTime = down.uptimeMillis
 
         fun toSkin(p: Offset): IntOffset? {
             val cell = size.width * scale.floatValue / 64f
@@ -694,12 +702,45 @@ private suspend fun PointerInputScope.editorGestures(
         if (lineStart != null) previewLine(down.position)
         down.consume()
 
+        // Long-press with a painting tool picks the color under the finger instead.
+        // Finger mode only. Ends early on movement past touch slop, a second finger, or lift.
+        var pending: PointerEvent? = null
+        val holdEligible = !state.stylusOnly &&
+            (pen || lineStart != null || state.tool == Tool.FILL)
+        if (holdEligible) {
+            pending = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                var ev: PointerEvent
+                do {
+                    ev = awaitPointerEvent()
+                    val one = ev.changes.count { it.pressed } == 1
+                    val moved = ev.changes.any { (it.position - down.position).getDistance() > viewConfiguration.touchSlop }
+                } while (one && !moved)
+                ev
+            }
+            if (pending == null) {
+                if (changed || lineStart != null) state.restore(before)
+                toSkin(down.position)?.let { p ->
+                    val keep = state.tool
+                    state.pick(p.y * 64 + p.x)
+                    if (keep != Tool.ERASER) state.tool = keep
+                }
+                do {
+                    val ev = awaitPointerEvent()
+                    ev.changes.forEach { it.consume() }
+                } while (ev.changes.any { it.pressed })
+                return@awaitEachGesture
+            }
+        }
+
         do {
-            val event = awaitPointerEvent()
+            val event = pending ?: awaitPointerEvent()
+            pending = null
+            lastTime = event.changes.maxOf { it.uptimeMillis }
             // Two clearly separate paths: when Stylus mode is off, this is byte-for-byte
             // the original finger/stylus-agnostic logic, touched by nothing added below.
             if (!state.stylusOnly) {
                 val pressed = event.changes.count { it.pressed }
+                if (pressed > maxPressed) maxPressed = pressed
                 if (pressed >= 2) {
                     if (!multi) {
                         multi = true
@@ -711,6 +752,8 @@ private suspend fun PointerInputScope.editorGestures(
                     }
                     val zoom = event.calculateZoom()
                     val pan = event.calculatePan()
+                    multiTravel += pan.getDistance()
+                    multiZoom *= zoom
                     val centroid = event.calculateCentroid(useCurrent = true)
                     val source = centroid - pan
                     val old = scale.floatValue
@@ -818,6 +861,14 @@ private suspend fun PointerInputScope.editorGestures(
             }
         } else {
             marquee.value = null
+            // A quick, nearly motionless multi-finger tap: 2 fingers undo, 3 redo.
+            val quick = lastTime - down.uptimeMillis <= MULTI_TAP_MS
+            val still = multiTravel < viewConfiguration.touchSlop * 1.5f && abs(multiZoom - 1f) < 0.08f
+            if (!state.stylusOnly && quick && still) {
+                scale.floatValue = scale0
+                offset.value = offset0
+                if (maxPressed >= 3) state.redo() else if (maxPressed == 2) state.undo()
+            }
         }
         if (changed) {
             state.touched()
@@ -825,6 +876,8 @@ private suspend fun PointerInputScope.editorGestures(
         }
     }
 }
+
+private const val MULTI_TAP_MS = 300L
 
 fun line(a: IntOffset, b: IntOffset, plot: (Int, Int) -> Unit) {
     var x0 = a.x
