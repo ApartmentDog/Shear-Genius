@@ -3,6 +3,8 @@ name: Build APK
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -22,6 +24,20 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
+
+      - name: Run unit tests
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle testDebugUnitTest --no-daemon --stacktrace 2>&1 | tee test.log
+
+      - name: Report test failures
+        if: failure()
+        shell: bash
+        run: |
+          { grep -E 'FAILED|AssertionError|^e: ' test.log | head -40; } > errors.txt || true
+          msg=$(sed -e 's/%/%25/g' errors.txt | awk '{printf "%s%%0A", $0}')
+          echo "::error title=Test failures::${msg}"
 
       - name: Restore signing key
         shell: bash
@@ -71,6 +87,7 @@ jobs:
           path: ShearGenius-${{ github.run_number }}.apk
 
       - uses: softprops/action-gh-release@v2
+        if: github.event_name != 'pull_request'
         with:
           tag_name: build-${{ github.run_number }}
           name: Build ${{ github.run_number }}
