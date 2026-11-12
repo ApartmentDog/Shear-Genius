@@ -41,7 +41,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Image
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import com.apartmentdog.sheargenius.AppState
+import com.apartmentdog.sheargenius.RefImage
 import com.apartmentdog.sheargenius.Tool
 
 /** Name to ARGB. Index is what gets saved in prefs. */
@@ -225,6 +230,8 @@ fun PreviewScreen(state: AppState) {
 private fun RenderPanel(state: AppState, background: Int) {
     val context = LocalContext.current
     var shareAfter by remember { mutableStateOf(false) }
+    var sheetRef by remember { mutableIntStateOf(-1) }
+    var sheetBg by remember { mutableIntStateOf(-1) }
     fun deliver(bitmap: android.graphics.Bitmap, suffix: String) {
         val uri = RenderExport.save(context, bitmap, "${state.projectName} $suffix")
         if (uri == null) {
@@ -244,7 +251,36 @@ private fun RenderPanel(state: AppState, background: Int) {
             BlockButton(onClick = { deliver(RenderExport.turnaround(state, bg), "turnaround") }, label = "Save turnaround")
         }
         Spacer(Modifier.height(8.dp))
-        BlockButton(onClick = { deliver(RenderExport.proofSheet(state, bg), "proof sheet") }, label = "Save proof sheet", modifier = Modifier.fillMaxWidth())
+        Spacer(Modifier.height(4.dp))
+        PixelText("Proof sheet", 13.sp)
+        Spacer(Modifier.height(6.dp))
+        PixelText("Reference (right side)", 11.sp)
+        Spacer(Modifier.height(4.dp))
+        ImageChoiceRow(state.references, sheetRef, "None") { sheetRef = it }
+        Spacer(Modifier.height(8.dp))
+        PixelText("Background", 11.sp)
+        Spacer(Modifier.height(4.dp))
+        ImageChoiceRow(state.references, sheetBg, "Color") { sheetBg = it }
+        if (state.references.isEmpty()) {
+            Spacer(Modifier.height(4.dp))
+            PixelText("Add images on the References screen to use them here.", 11.sp)
+        }
+        Spacer(Modifier.height(8.dp))
+        BlockButton(
+            onClick = {
+                deliver(
+                    RenderExport.proofSheet(
+                        state,
+                        bg,
+                        reference = state.references.getOrNull(sheetRef)?.bitmap,
+                        bgImage = state.references.getOrNull(sheetBg)?.bitmap
+                    ),
+                    "proof sheet"
+                )
+            },
+            label = "Save proof sheet",
+            modifier = Modifier.fillMaxWidth()
+        )
         Spacer(Modifier.height(8.dp))
         BlockButton(onClick = { shareAfter = !shareAfter }, label = "Share after saving", selected = shareAfter)
         Spacer(Modifier.height(10.dp))
@@ -273,6 +309,29 @@ private fun RenderPanel(state: AppState, background: Int) {
         }
         Spacer(Modifier.height(6.dp))
         PixelText("Uses the current angle, zoom, parts and background. Pick Clear for a transparent PNG.", 11.sp)
+    }
+}
+
+/** "None"/"Color" button followed by a thumbnail for each reference image. -1 means none. */
+@Composable
+private fun ImageChoiceRow(refs: List<RefImage>, selected: Int, noneLabel: String, onSelect: (Int) -> Unit) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        BlockButton(onClick = { onSelect(-1) }, label = noneLabel, selected = selected !in refs.indices)
+        refs.forEachIndexed { i, r ->
+            val thumb = remember(r) { r.bitmap.asImageBitmap() }
+            Slot(size = 48.dp, selected = i == selected, onClick = { onSelect(i) }) {
+                Image(
+                    bitmap = thumb,
+                    contentDescription = "Reference image ${i + 1}",
+                    modifier = Modifier.size(36.dp),
+                    contentScale = ContentScale.Crop
+                )
+            }
+        }
     }
 }
 
